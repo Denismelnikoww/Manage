@@ -1,0 +1,246 @@
+{
+  "main": {
+    "id": "33fcf0e7f1241b6a",
+    "type": "split",
+    "children": [
+      {
+        "id": "d2a9b8b06d77a3c0",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "59a71fe87ad71264",
+            "type": "leaf",
+            "state": {
+              "type": "pm-dashboard",
+              "state": {},
+              "icon": "chart-gantt",
+              "title": "Проекты"
+            }
+          },
+          {
+            "id": "f36edd9a18e06f6d",
+            "type": "leaf",
+            "state": {
+              "type": "pm-project",
+              "state": {
+                "scope": {
+                  "kind": "project",
+                  "path": "Projects/LabFlow/LabFlow.md"
+                },
+                "filePath": "Projects/LabFlow/LabFlow.md",
+                "anchor": "Projects/LabFlow/LabFlow.md"
+              },
+              "icon": "chart-gantt",
+              "title": "LabFlow"
+            }
+          }
+        ],
+        "currentTab": 1
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "fcc91940e97ea5dd",
+    "type": "split",
+    "children": [
+      {
+        "id": "59d4ac5e53a6bbf7",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "2feaa41d7ce3c485",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Файловый менеджер"
+            }
+          },
+          {
+            "id": "725429d6a31ddc7f",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Поиск"
+            }
+          },
+          {
+            "id": "1aacac037c87b6a9",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-bookmark",
+              "title": "Закладки"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 200
+  },
+  "right": {
+    "id": "7c9d41691f62f1d1",
+    "type": "split",
+    "children": [
+      {
+        "id": "f78b3a7b96c1a589",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "fa614cdffb7afeda",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Обратные ссылки"
+            }
+          },
+          {
+            "id": "75bd69dccfcb2e2f",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Исходящие ссылки"
+            }
+          },
+          {
+            "id": "9e6ab0fc0a8638eb",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Теги"
+            }
+          },
+          {
+            "id": "813e6686ec7ec5f3",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "Все свойства"
+            }
+          },
+          {
+            "id": "d20e07f7eca1355c",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Структура"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 341.08795166015625,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Меню быстрого перехода": false,
+      "graph:Граф": false,
+      "canvas:Создать новый холст": false,
+      "daily-notes:Сегодняшняя заметка": false,
+      "templates:Вставить шаблон": false,
+      "command-palette:Открыть палитру команд": false,
+      "bases:Создать новую базу": false,
+      "project-manager:Управление проектами": false,
+      "obsidian-kanban:Создать новую доску": false
+    }
+  },
+  "active": "2feaa41d7ce3c485",
+  "lastOpenFiles": [
+    "docs",
+    "Новая папка",
+    "Projects/LabFlow/_tasks/4.2.2.-[backend---pm]-проектирование-таблиц,-реализация-crud.md",
+    "Projects/LabFlow/_tasks/4.3.2.-[backend---pm]-проектирование-таблицы-истории-статусо.md",
+    "Projects/LabFlow/_tasks/6.1.4.-[вся-команда]-защита-портфолио-с-живой-демонстрацией-.md",
+    "Projects/LabFlow/_tasks/1.3.3.-[pm-+-qa]-подтверждение-приёмки-по-критериям-smart-ре.md",
+    "Projects/LabFlow/_tasks/5.1.6.-[qa-+-pm]-подготовка-результатов-тестирования-для-под.md",
+    "Projects/LabFlow/_tasks/1.3.1.-[вся-команда]-финальная-ретроспектива..md",
+    "Projects/LabFlow/_tasks/5.1.5.-[вся-команда]-приёмка-по-критериям-smart--0-критичных.md",
+    "Projects/LabFlow/_tasks/4.3.4.-[frontend]-интеграция-с-api-статусов,-обновление-спис.md",
+    "Projects/LabFlow/_tasks/wbs-6.md",
+    "Projects/LabFlow/_tasks/wbs-6-1.md",
+    "Projects/LabFlow/_tasks/wbs-6-1-4.md",
+    "Projects/LabFlow/_tasks/wbs-6-1-3.md",
+    "Projects/LabFlow/_tasks/wbs-6-1-2.md",
+    "Projects/LabFlow/_tasks/wbs-6-1-1.md",
+    "Projects/LabFlow/_tasks/wbs-5.md",
+    "Projects/LabFlow/_tasks/wbs-5-1.md",
+    "Projects/LabFlow/_tasks/wbs-5-1-6.md",
+    "Projects/LabFlow/_tasks/wbs-5-1-5.md",
+    "Projects/LabFlow/_tasks/wbs-5-1-4.md",
+    "Projects/LabFlow/_tasks/wbs-5-1-3.md",
+    "Projects/LabFlow/_tasks/wbs-5-1-2.md",
+    "Projects/LabFlow/_tasks/wbs-5-1-1.md",
+    "Projects/LabFlow/_tasks/wbs-4.md",
+    "Projects/LabFlow/_tasks/wbs-4-5.md",
+    "Projects/LabFlow/_tasks/wbs-4-5-7.md",
+    "People",
+    "Projects/LabFlow/_tasks",
+    "Projects/LabFlow",
+    "Projects",
+    "Operon/Demo Workspace",
+    "Operon/Tasks",
+    "Operon/Tables/Default table.table",
+    "Operon/Tables",
+    "Operon",
+    "Без названия 1.canvas",
+    "Без названия.canvas",
+    "Pasted image 20261027014522.png"
+  ]
+}
