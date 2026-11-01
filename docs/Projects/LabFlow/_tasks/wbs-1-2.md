@@ -7,8 +7,8 @@ title: "1.2. Оперативное управление и мониторинг
 type: "task"
 status: todo
 priority: medium
-start: "2026-10-26"
-due: "2026-12-13"
+start: "2026-11-02"
+due: "2026-12-11"
 progress: 0
 assignees:
   - "[[Мельников Денис]]"

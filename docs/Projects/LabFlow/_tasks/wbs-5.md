@@ -8,7 +8,7 @@ type: "milestone"
 status: todo
 priority: medium
 start: "2026-11-02"
-due: "2026-12-13"
+due: "2026-12-14"
 progress: 0
 assignees:
   - "[[Кулов Дамир]]"

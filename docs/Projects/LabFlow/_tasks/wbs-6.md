@@ -7,7 +7,7 @@ title: "6. Документация и защита"
 type: "milestone"
 status: todo
 priority: medium
-start: "2026-11-02"
+start: "2026-11-09"
 due: "2026-12-20"
 progress: 0
 assignees:

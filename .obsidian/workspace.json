@@ -1,0 +1,234 @@
+{
+  "main": {
+    "id": "073c48c17d637a87",
+    "type": "split",
+    "children": [
+      {
+        "id": "e76b57738f256e8c",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "76d4c4a3959eb393",
+            "type": "leaf",
+            "state": {
+              "type": "pm-dashboard",
+              "state": {},
+              "icon": "chart-gantt",
+              "title": "Проекты"
+            }
+          },
+          {
+            "id": "51795fb5e22a88da",
+            "type": "leaf",
+            "state": {
+              "type": "pm-project",
+              "state": {
+                "scope": {
+                  "kind": "project",
+                  "path": "docs/Projects/LabFlow/LabFlow.md"
+                },
+                "filePath": "docs/Projects/LabFlow/LabFlow.md",
+                "anchor": "docs/Projects/LabFlow/LabFlow.md"
+              },
+              "icon": "chart-gantt",
+              "title": "LabFlow"
+            }
+          }
+        ],
+        "currentTab": 1
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "9f4c113ce0da35a9",
+    "type": "split",
+    "children": [
+      {
+        "id": "424cbeda5048ac84",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "70710f5900545e06",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Файловый менеджер"
+            }
+          },
+          {
+            "id": "be9eb5c917b7e3b0",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Поиск"
+            }
+          },
+          {
+            "id": "649cbed0f7fbcb01",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-bookmark",
+              "title": "Закладки"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "7f0d12702e7d583f",
+    "type": "split",
+    "children": [
+      {
+        "id": "725a79a56bf19389",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "4689316f0da5dafa",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Обратные ссылки"
+            }
+          },
+          {
+            "id": "dbbf57cdd6516d10",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Исходящие ссылки"
+            }
+          },
+          {
+            "id": "74c18ea3c46172c8",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Теги"
+            }
+          },
+          {
+            "id": "d79864be4d5218d7",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "Все свойства"
+            }
+          },
+          {
+            "id": "9b009585e1a838bd",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Структура"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Меню быстрого перехода": false,
+      "graph:Граф": false,
+      "canvas:Создать новый холст": false,
+      "daily-notes:Сегодняшняя заметка": false,
+      "templates:Вставить шаблон": false,
+      "command-palette:Открыть палитру команд": false,
+      "bases:Создать новую базу": false,
+      "project-manager:Управление проектами": false
+    }
+  },
+  "active": "51795fb5e22a88da",
+  "lastOpenFiles": [
+    "docs/Projects/LabFlow/_tasks/2.1.2.-[backend]-разработка-dockerfile-и-docker-compose.yml-.md",
+    "docs/Projects/LabFlow/_tasks/4.3.3.-[frontend]-вёрстка-ui-смены-статуса-(для-преподавател.md",
+    "docs/Projects/LabFlow/_tasks/4.5.7.-[qa]-функциональное-тестирование,-баг-репорты,-верифи.md",
+    "docs/Projects/LabFlow/_tasks/wbs-4-6-4.md",
+    "docs/Projects/LabFlow/_tasks/wbs-4-6-3.md",
+    "docs/Projects/LabFlow/_tasks/wbs-4-6-2.md",
+    "docs/Projects/LabFlow/_tasks/wbs-4-6-1.md",
+    "docs/Projects/LabFlow/_tasks/wbs-4-6.md",
+    "docs/Projects/LabFlow/_tasks/4.1.4.-[frontend]-вёрстка-формы-входа-регистрации-по-макету-.md",
+    "docs/Projects/LabFlow/_tasks/4.1.2.-[backend---pm]-проектирование-структуры-таблиц-users-.md",
+    "docs/Projects/LabFlow/_tasks/2.2.4.-[lead-dev]-мониторинг-работоспособности-развёрнутого-.md",
+    "docs/Projects/LabFlow/_tasks/2.2.2.-сценарии-автоматического-запуска-модульного-и-интегра.md",
+    "docs/Projects/LabFlow/_tasks/4.1.-модуль-«аутентификация-и-авторизация».md",
+    "docs/Projects/LabFlow/_tasks/3.1.3.-[аналитик]-описание-api-(openapi-спецификация),-схема.md",
+    "docs/Projects/LabFlow/_tasks/5.1.4.-[qa-+-аналитик]-трассировка-требований-к-тест-кейсам,.md",
+    "docs/Projects/LabFlow/_tasks/4.1.3.-[backend]-реализация-проверки-прав-доступа-по-ролям,-.md",
+    "docs/Projects/LabFlow/_tasks/6.1.2.-[аналитик]-трассировка-требований-к-задачам-и-тест-ке.md",
+    "docs/Projects/LabFlow/_tasks/6.1.1.-[аналитик]-ведение-документации-в-obsidian--user-stor.md",
+    "docs/Projects/LabFlow/_tasks/3.1.4.-[аналитик]-трассировка-требований-к-задачам-и-тест-ке.md",
+    "docs/Projects/LabFlow/_tasks/5.1.1.-[qa]-составление-тест-плана-и-черновиков-тест-кейсов-.md",
+    "docs/Projects/LabFlow/_tasks/3.1.2.-[аналитик---qa]-формулирование-definition-of-done-(do.md",
+    "docs/Projects/LabFlow/_tasks/4.1.1.-[аналитик]-сценарии-входа-регистрации,-разграничение-.md",
+    "docs/Projects/LabFlow/_tasks/3.1.1.-[аналитик]-разработка-use-cases-и-декомпозиция-на-use.md",
+    "docs/Projects/LabFlow/_tasks/3.1.-проектирование-требований.md",
+    "docs/Projects/LabFlow/_tasks/2.2.1.-[lead-dev]-настройка-ci-скриптов-автоматизированной-с.md",
+    "docs/Projects/LabFlow/_tasks/2.2.-автоматизация-процессов-сборки-и-развертывания-(ci-cd).md",
+    "Без названия 1.base",
+    "Без названия.base"
+  ]
+}
