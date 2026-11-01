@@ -28,5 +28,17 @@ export const mockApi = {
     getWorks: async () => {
         await delay(400);
         return mockWorks;
+    },
+    createWork: async (title: string, description: string, deadline: string) => {
+        await delay(400);
+        const newWork: Work = {
+            id: `w-${Date.now()}`,
+            title,
+            description,
+            status: 'TODO',
+            deadline,
+        };
+        mockWorks.push(newWork);
+        return newWork;
     }
 };
