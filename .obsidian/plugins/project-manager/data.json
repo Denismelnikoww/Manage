@@ -1,0 +1,139 @@
+{
+  "projectsFolder": "Projects",
+  "peopleFolder": "People",
+  "excludedFolders": [],
+  "defaultView": "table",
+  "ganttGranularity": "week",
+  "ganttWeekLabel": "weekNumber",
+  "holidays": [],
+  "statuses": [
+    {
+      "id": "todo",
+      "label": "К выполнению",
+      "color": "#8a94a0",
+      "icon": "",
+      "complete": false
+    },
+    {
+      "id": "in-progress",
+      "label": "В работе",
+      "color": "#8b72be",
+      "icon": "",
+      "complete": false
+    },
+    {
+      "id": "blocked",
+      "label": "Заблокировано",
+      "color": "#c47070",
+      "icon": "",
+      "complete": false
+    },
+    {
+      "id": "review",
+      "label": "На проверке",
+      "color": "#b8a06b",
+      "icon": "",
+      "complete": false
+    },
+    {
+      "id": "done",
+      "label": "Готово",
+      "color": "#79b58d",
+      "icon": "",
+      "complete": true
+    },
+    {
+      "id": "cancelled",
+      "label": "Отменено",
+      "color": "#767491",
+      "icon": "",
+      "complete": true
+    }
+  ],
+  "priorities": [
+    {
+      "id": "critical",
+      "label": "Критический",
+      "color": "#c47070",
+      "icon": ""
+    },
+    {
+      "id": "high",
+      "label": "Высокий",
+      "color": "#b8a06b",
+      "icon": ""
+    },
+    {
+      "id": "medium",
+      "label": "Средний",
+      "color": "#8a94a0",
+      "icon": ""
+    },
+    {
+      "id": "low",
+      "label": "Низкий",
+      "color": "#79b58d",
+      "icon": ""
+    }
+  ],
+  "priorityIcons": "chevrons",
+  "customFields": [],
+  "globalTeamMembers": [],
+  "showSubtreeConnections": true,
+  "lineBorders": "none",
+  "showTagColors": true,
+  "dateFormat": "",
+  "notificationsEnabled": true,
+  "notificationLeadDays": 2,
+  "autoArchiveDays": 0,
+  "lastAutoArchiveDate": "",
+  "autoSchedule": true,
+  "pullForwardOnEarlyFinish": false,
+  "saveTaskOnClose": true,
+  "taskEditorSurface": "modal",
+  "editorSaveModifier": "Shift",
+  "projectSurface": "overview",
+  "projectFilters": {
+    "project:docs/Projects/LabFlow/LabFlow.md": {
+      "filter": {
+        "conditions": [],
+        "showArchived": false
+      },
+      "activeSavedViewId": null,
+      "sort": [
+        {
+          "key": "status",
+          "dir": "asc"
+        }
+      ],
+      "group": {
+        "field": "status"
+      },
+      "fields": {},
+      "ganttGranularity": "week",
+      "nonWorkingDays": {}
+    }
+  },
+  "defaultFields": {},
+  "scopeViews": {},
+  "collapsedTasks": {
+    "docs/Projects/LabFlow/LabFlow.md": [
+      "wbs-1-3",
+      "wbs-1-2"
+    ]
+  },
+  "collapsedProjects": [],
+  "showArchivedProjects": false,
+  "projectList": {
+    "filter": {},
+    "sort": [],
+    "group": "none",
+    "activeViewId": null
+  },
+  "projectListViews": [],
+  "localApiEnabled": false,
+  "localApiPort": 27183,
+  "localApiToken": "68aefa4521d64840b45b1dce4b5529d59b79e4c0eb412bae",
+  "showReleaseNotes": true,
+  "lastSeenVersion": "2.6.0"
+}
