@@ -1,0 +1,116 @@
+.works-container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 32px 20px;
+}
+
+.works-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-color);
+
+  h2 {
+    font-size: 22px;
+    font-weight: 600;
+  }
+}
+
+.create-work-panel {
+  background: var(--surface-color);
+  padding: 20px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  margin-bottom: 24px;
+
+  h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 16px;
+  }
+
+  form {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+
+    input[type="text"] {
+      flex: 1;
+      min-width: 200px;
+    }
+
+    input[type="date"] {
+      width: auto;
+      min-width: 150px;
+    } }
+}
+
+.filters-panel {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+
+  button {
+    background-color: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+    padding: 6px 12px;
+    border-radius: 20px; // чуть скругленные для фильтров
+    font-size: 13px;
+
+    &:hover {
+      background-color: #f3f4f6;
+    }
+    &.active {
+      background-color: var(--primary-color);
+      border-color: var(--primary-color);
+      color: white;
+    } }}
+
+.works-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.work-card {
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+
+  h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+  p {
+    font-size: 14px;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+    flex-grow: 1; // чтобы прижать футер к низу
+  }
+  .work-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 12px;
+    border-top: 1px solid #f3f4f6;
+    font-size: 13px;
+    strong {
+      color: var(--text-main);
+    }
+    .status-badge {
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-weight: 500;
+      background-color: #e5e7eb;
+      color: #374151;
+    }
+  }
+}
