@@ -1,406 +1,264 @@
-# Спецификация схемы базы данных (ERD) — Проект LabFlow
+# Спецификация модели данных: ER-диаграмма и Словарь данных (Data Dictionary)
 
+**Проект:** Сервис сдачи и отслеживания лабораторных работ «LabFlow» (группа ВПР42)  
 **Задача ИСР:** 3.1.3. [Аналитик] Описание API (OpenAPI-спецификация), схема БД, матрица ролей и прав доступа  
-**Исполнитель:** Пашковский Владимир (Роль: Аналитик) при участии Паршина А. (Lead Dev) и Теплова А. (Backend)  
-**Период выполнения:** 4–5 ноября 2026 г.  
-**СУБД:** PostgreSQL 16+  
-**Статус документа:** Утверждено для реализации миграций и реляционного слоя бэкенда (WBS 4.1.2, 4.2.2, 4.3.2, 4.4.2)  
+**Автор документа:** Пашковский Владимир (Роль: Аналитик)  
+**Получатели артефакта:** Мельников Д. (PM / Backend Auth), Паршин А. (Lead Dev Backend CRUD), Теплов А. (Backend Telegram & Storage), Кулов Д. (QA)  
+**Статус документа:** Утверждено. Аналитическое техническое задание для генерации миграций и реляционного слоя  
 
 ---
 
-## 1. Введение и архитектурные принципы
+## 1. Назначение документа и роль аналитика
 
-Настоящий документ регламентирует реляционную модель данных сервиса отслеживания и сдачи лабораторных работ **LabFlow** для учебной группы ВПР42. 
+В соответствии с методологией системного анализа, аналитик не создает физические файлы миграций в кодовой базе бэкенда (это прямая зона ответственности Backend-разработчиков в рамках задач 4.1.2, 4.2.2, 4.3.2, 4.5.2). 
 
-### Ключевые принципы проектирования:
-1. **Нормализация:** База данных спроектирована в третьей нормальной форме (3NF), что исключает избыточность и аномалии модификации данных.
-2. **Идентификация сущностей:** В качестве первичных ключей (PK) для всех таблиц используются суррогатные идентификаторы типа `UUID` (`UUIDv4`), генерируемые сервером СУБД с помощью функции `gen_random_uuid()`. Это предотвращает уязвимости перебора идентификаторов (IDOR) и упрощает горизонтальное масштабирование.
-3. **Целостность и консистентность:** Бизнес-правила фиксируются на уровне схемы СУБД через ограничения `FOREIGN KEY`, `UNIQUE`, `NOT NULL` и `CHECK`.
-4. **Мягкое удаление (Soft Delete):** Удаление лабораторных работ не приводит к каскадной потере академической истории и отчетов студентов — используется логический флаг `is_deleted`.
-5. **Аудит времени:** Все таблицы содержат таймстампы создания (`created_at`) и обновления (`updated_at`) с временной зоной (`TIMESTAMPTZ`).
-6. **Разделение ответственности с MinIO:** Физические файлы отчетов (PDF, DOCX, ZIP объемом до 20 МБ) хранятся в S3-совместимом объектном хранилище MinIO. В таблицах БД хранятся только метаданные файла, его размер, MIME-тип и уникальный S3-ключ объекта (`file_path`).
+**Задача аналитика** — предоставить формализованную модель данных, состоящую из:
+1. **ER-диаграммы (Entity-Relationship Diagram):** графической схемы сущностей предметной области и кардинальности связей между ними (1:1, 1:N, N:M).
+2. **Словаря данных (Data Dictionary):** исчерпывающего каталога сущностей и атрибутов, где для каждого поля зафиксированы логическое и физическое наименования, тип данных, обязательность, уникальность, а также бизнес-правила валидации и консистентности.
+3. **Бизнес-инвариантов целостности:** правил каскадности, ограничений предметной области и жизненного цикла данных.
 
 ---
 
-## 2. Диаграмма связей сущностей (Entity-Relationship Diagram)
+## 2. ER-диаграмма предметной области (Entity-Relationship Diagram)
 
-Ниже представлена ER-диаграмма, отражающая 4 базовые сущности предметной области (`users`, `lab_works`, `student_submissions`, `comments`), вспомогательную таблицу одноразовых токенов авторизации Telegram (`telegram_auth_tokens`), а также перечисления (`ENUM`).
+### 2.1. Визуальная схема сущностей и связей
+
+Диаграмма описывает 5 ключевых сущностей сервиса LabFlow и их ассоциации:
+* `users` (Пользователи системы: студенты и преподаватели);
+* `lab_works` (Лабораторные работы учебной программы);
+* `student_submissions` (Карточки сдачи и прогресс студентов по работам);
+* `comments` (Рецензии и замечания к сданным отчетам);
+* `telegram_auth_tokens` (Временные токены связывания с Telegram-ботом).
 
 ```mermaid
 erDiagram
-    users ||--o{ lab_works : "создает (teacher)"
-    users ||--o{ student_submissions : "сдает (student)"
-    users ||--o{ comments : "оставляет (teacher)"
-    users ||--o{ telegram_auth_tokens : "генерирует"
-    lab_works ||--o{ student_submissions : "содержит сдачи группы"
-    student_submissions ||--o{ comments : "рецензируется"
+    users ||--o{ lab_works : "создает / публикует (1:N, teacher)"
+    users ||--o{ student_submissions : "выполняет и сдает (1:N, student)"
+    users ||--o{ comments : "оставляет замечания (1:N)"
+    users ||--o{ telegram_auth_tokens : "запрашивает привязку (1:N)"
+    
+    lab_works ||--o{ student_submissions : "назначается студентам (1:N)"
+    student_submissions ||--o{ comments : "содержит цепочку замечаний (1:N)"
 
     users {
-        uuid id PK "gen_random_uuid()"
-        varchar email UK "Уникальный email пользователя"
-        varchar password_hash "Хеш пароля (Argon2id/bcrypt)"
-        varchar full_name "ФИО пользователя"
-        user_role role "ENUM: student, teacher"
-        varchar group_name "Учебная группа (для student: ВПР42)"
-        bigint telegram_chat_id UK "Telegram Chat ID для нотификаций"
-        varchar telegram_username "Никнейм в Telegram"
-        boolean is_active "Флаг активности учетной записи"
-        timestamptz created_at "Дата и время регистрации"
-        timestamptz updated_at "Дата и время обновления"
+        uuid id PK "Логический ID"
+        string email UK "Электронная почта (логин)"
+        string password_hash "Хеш пароля"
+        string full_name "ФИО пользователя"
+        user_role role "Роль: student | teacher"
+        string group_name "Номер академической группы"
+        int telegram_chat_id UK "ID чата в Telegram"
+        string telegram_username "Ник в Telegram"
+        boolean is_active "Признак активности"
+        datetime created_at "Дата регистрации"
+        datetime updated_at "Дата обновления"
     }
 
     lab_works {
-        uuid id PK "gen_random_uuid()"
-        integer work_number "Порядковый номер лабораторной (1..N)"
-        varchar title "Название лабораторной работы"
-        text description "Методические указания и требования"
-        timestamptz deadline "Крайний срок сдачи (дедлайн)"
-        varchar group_name "Целевая учебная группа (ВПР42)"
-        uuid creator_id FK "Ссылка на автора-преподавателя (users.id)"
+        uuid id PK "Логический ID"
+        int work_number "Порядковый номер (1..N)"
+        string title "Тема работы"
+        text description "Методические указания"
+        datetime deadline "Крайний срок сдачи"
+        string group_name "Целевая группа (ВПР42)"
+        uuid creator_id FK "Преподаватель-автор"
         boolean is_deleted "Мягкое удаление (soft delete)"
-        timestamptz created_at "Дата публикации"
-        timestamptz updated_at "Дата изменения параметров"
+        datetime created_at "Дата публикации"
+        datetime updated_at "Дата изменения"
     }
 
     student_submissions {
-        uuid id PK "gen_random_uuid()"
-        uuid lab_work_id FK "Ссылка на работу (lab_works.id)"
-        uuid student_id FK "Ссылка на студента (users.id)"
-        submission_status status "ENUM: 5 детерминированных статусов"
-        varchar file_path "Ключ объекта в MinIO"
-        varchar file_name "Исходное имя загруженного файла"
-        bigint file_size_bytes "Размер файла в байтах (до 20 МБ)"
-        varchar file_mime_type "MIME-тип (PDF, DOCX, ZIP)"
-        timestamptz submitted_at "Время последней загрузки отчета"
-        timestamptz reviewed_at "Время выставления вердикта преподавателем"
-        timestamptz created_at "Время инициализации карточки сдачи"
-        timestamptz updated_at "Время изменения статуса/файла"
+        uuid id PK "Логический ID сдачи"
+        uuid lab_work_id FK "Ссылка на работу"
+        uuid student_id FK "Ссылка на студента"
+        submission_status status "Статус (5 состояний)"
+        string file_path "S3-ключ объекта в MinIO"
+        string file_name "Исходное имя файла"
+        int file_size_bytes "Размер файла (до 20 МБ)"
+        string file_mime_type "MIME-тип (PDF/DOCX/ZIP)"
+        datetime submitted_at "Время сдачи отчета"
+        datetime reviewed_at "Время проверки"
+        datetime created_at "Время назначения работы"
+        datetime updated_at "Время обновления статуса"
     }
 
     comments {
-        uuid id PK "gen_random_uuid()"
-        uuid submission_id FK "Ссылка на сдачу (student_submissions.id)"
-        uuid author_id FK "Ссылка на автора комментария (users.id)"
-        text text "Текст рецензии/замечаний (от 5 до 2000 симв.)"
-        timestamptz created_at "Время отправки комментария"
-        timestamptz updated_at "Время редактирования комментария"
+        uuid id PK "Логический ID комментария"
+        uuid submission_id FK "Ссылка на сдачу"
+        uuid author_id FK "Автор комментария"
+        text text "Текст рецензии/замечания"
+        datetime created_at "Время отправки"
+        datetime updated_at "Время редактирования"
     }
 
     telegram_auth_tokens {
-        uuid id PK "gen_random_uuid()"
-        uuid user_id FK "Ссылка на пользователя (users.id)"
-        varchar token UK "Одноразовый deep-link токен"
-        timestamptz expires_at "Срок действия токена (10 минут)"
-        boolean is_used "Флаг погашения токена"
-        timestamptz created_at "Время генерации"
+        uuid id PK "Логический ID токена"
+        uuid user_id FK "Ссылка на пользователя"
+        string token UK "Одноразовый проверочный код"
+        datetime expires_at "Срок жизни (TTL 10 мин)"
+        boolean is_used "Признак погашения"
+        datetime created_at "Время генерации"
     }
 ```
 
 ---
 
-## 3. Детальный словарь данных (Data Dictionary)
+### 2.2. Матрица связей между сущностями (Cardinality & Constraints)
 
-### 3.1. Пользовательские типы перечислений (ENUMs)
-
-#### 1. `user_role`
-Определяет системную роль пользователя и уровень прав доступа:
-- `student` — Студент академической группы (ВПР42). Доступны: просмотр назначенных работ, перевод работы в статус «В работе», загрузка отчетов, чтение комментариев преподавателя, скачивание своего файла.
-- `teacher` — Преподаватель/ассистент кафедры. Доступны: создание/редактирование/удаление карточек работ, просмотр общей ведомости группы, скачивание отчетов всех студентов, рецензирование (комментирование) и утверждение вердиктов («Принята» / «На доработке»).
-
-#### 2. `submission_status`
-Отражает 5 детерминированных состояний конечного автомата сдачи лабораторной работы:
-- `not_started` — «Не начата» (начальное состояние при публикации работы для группы).
-- `in_progress` — «В работе» (студент нажал «Взять в работу»).
-- `submitted` — «Сдана» (студент прикрепил файл отчета и отправил на проверку).
-- `needs_work` — «На доработке» (преподаватель вернул отчет с замечаниями).
-- `accepted` — «Принята» (финальное успешное состояние защиты работы).
+| Родительская сущность | Дочерняя сущность | Связь | Обязательность | Бизнес-правило связи | Поведение при удалении родителя |
+|---|---|:---:|:---:|---|---|
+| `users` (Преподаватель) | `lab_works` | **1 : N** | 1 (обяз.) : 0..N | Преподаватель может создать множество лабораторных работ. Работа не может существовать без автора. | `RESTRICT` (запрещено удалять преподавателя, если у него есть привязанные работы). |
+| `users` (Студент) | `student_submissions` | **1 : N** | 1 (обяз.) : 0..N | Студент имеет персональные карточки сдачи по каждой опубликованной работе его группы. | `RESTRICT` (запрещено удалять студента с историей сданных работ). |
+| `lab_works` | `student_submissions` | **1 : N** | 1 (обяз.) : 0..N | По каждой работе создаются карточки сдачи для всех студентов группы. Сочетание `(lab_work_id, student_id)` строго уникально. | `RESTRICT` (физическое удаление запрещено, используется логический флаг `is_deleted = true`). |
+| `student_submissions` | `comments` | **1 : N** | 1 (обяз.) : 0..N | К одной сдаче может быть оставлено произвольное количество замечаний и рецензий преподавателя. | `CASCADE` (при удалении карточки сдачи каскадно удаляются все комментарии к ней). |
+| `users` | `comments` | **1 : N** | 1 (обяз.) : 0..N | Комментарий обязан иметь автора (преподаватель или студент). | `RESTRICT` (удаление автора запрещено). |
+| `users` | `telegram_auth_tokens` | **1 : N** | 1 (обяз.) : 0..N | Пользователь может генерировать токены для привязки Telegram-бота. | `CASCADE` (при удалении пользователя временные токены удаляются). |
 
 ---
 
-### 3.2. Таблица `users` (Пользователи)
+## 3. Словарь данных (Data Dictionary)
 
-Хранит учетные записи студентов и преподавателей сервиса.
+### 3.1. Перечисления предметной области (Enumerations)
 
-| Поле | Тип данных | Ограничения | Назначение и бизнес-правила |
+#### 1. Роли пользователей (`user_role`)
+* **`student`** — Студент академической группы. Доступ: просмотр назначенных работ группы, смена статуса на «В работе», загрузка файла отчета (PDF/DOCX/ZIP до 20 МБ), просмотр комментариев, получение уведомлений.
+* **`teacher`** — Преподаватель. Доступ: создание, редактирование, мягкое удаление лабораторных работ, просмотр ведомости сдачи группы, скачивание отчетов, оставление комментариев, выставление статусов «Принята» / «На доработке».
+
+#### 2. Жизненный цикл сдачи (`submission_status`)
+* **`not_started`** (Не начата) — начальный статус, присваиваемый автоматически при назначении работы группе.
+* **`in_progress`** (В работе) — статус выставляется студентом вручную при начале выполнения работы.
+* **`submitted`** (Сдана) — статус выставляется автоматически при успешной загрузке файла отчета студентом.
+* **`needs_work`** (На доработке) — выставляется преподавателем при наличии замечаний к отчету (требуется исправление).
+* **`accepted`** (Принята) — финальный положительный вердикт преподавателя, защита зачтена.
+
+---
+
+### 3.2. Сущность «Пользователи» (`users`)
+**Описание:** Учетные записи участников образовательного процесса (студентов и преподавателей).
+
+| Физическое имя | Логическое имя | Тип данных | Обязательность / Ключ | Бизнес-смысл и правила заполнения (валидация) |
+|---|---|---|:---:|---|
+| `id` | Идентификатор пользователя | UUID | **PK**, NOT NULL | Суррогатный первичный ключ. Генерируется автоматически (`gen_random_uuid()`). Защищает от перебора IDOR. |
+| `email` | Адрес электронной почты | Строка (до 255) | **UK**, NOT NULL | Логин для входа в сервис. Валидный email. Проверка уникальности без учета регистра символов (`LOWER(email)`). |
+| `password_hash` | Хеш пароля | Строка (до 255) | NOT NULL | Криптографический хеш пароля (Argon2id или bcrypt с солью). Открытые пароли никогда не хранятся в БД. |
+| `full_name` | ФИО пользователя | Строка (до 150) | NOT NULL | Полное имя (Фамилия Имя Отчество). Длина не менее 2 непробельных символов (`char_length(trim) >= 2`). |
+| `role` | Роль в системе | `user_role` | NOT NULL | Определяет права в системе. Принимает значение `student` или `teacher`. |
+| `group_name` | Учебная группа | Строка (до 50) | Опционально / Условное | **Бизнес-правило:** Если `role = 'student'`, поле **обязательно** для заполнения (для MVP строго `'ВПР42'`). Если `role = 'teacher'`, значение строго `NULL`. |
+| `telegram_chat_id` | Идентификатор чата Telegram | Большое целое (Int64) | **UK**, Опционально | Уникальный числовой Telegram ID пользователя. Заполняется при успешной привязке бота через deep-link. |
+| `telegram_username` | Имя пользователя в Telegram | Строка (до 100) | Опционально | Никнейм пользователя в Telegram (без `@`) для отображения в профиле и интерфейсе ведомости. |
+| `is_active` | Признак активности аккаунта | Булево | NOT NULL, По умолч.: `true` | Флаг блокировки учетной записи (при отчислении студента или увольнении преподавателя вход блокируется). |
+| `created_at` | Дата и время регистрации | Дата и время (TZ) | NOT NULL, По умолч.: `NOW` | Момент фиксации учетной записи в системе. |
+| `updated_at` | Дата и время обновления | Дата и время (TZ) | NOT NULL, По умолч.: `NOW` | Момент последнего изменения персональных данных профиля. |
+
+---
+
+### 3.3. Сущность «Лабораторные работы» (`lab_works`)
+**Описание:** Учебные задания, сформированные преподавателем для академической группы.
+
+| Физическое имя | Логическое имя | Тип данных | Обязательность / Ключ | Бизнес-смысл и правила заполнения (валидация) |
+|---|---|---|:---:|---|
+| `id` | Идентификатор работы | UUID | **PK**, NOT NULL | Суррогатный первичный ключ. Генерируется автоматически. |
+| `work_number` | Номер лабораторной работы | Целое число | NOT NULL | Порядковый номер работы в учебном плане (1, 2, 3...). Должен быть строго больше 0 (`work_number > 0`). |
+| `title` | Название работы | Строка (до 255) | NOT NULL | Краткая тема работы (например, «ЛР №1: Основы Git и CI/CD»). Длина от 3 символов. |
+| `description` | Описание и методические указания | Текст (TEXT) | NOT NULL | Полные требования к выполнению, ссылки на репозитории, методички и критерии оценивания. |
+| `deadline` | Срок сдачи (дедлайн) | Дата и время (TZ) | NOT NULL | Крайний срок отправки отчета без штрафа. **Бизнес-правило:** При создании работы дедлайн обязан быть позже текущего времени (`deadline > created_at`). |
+| `group_name` | Целевая учебная группа | Строка (до 50) | NOT NULL, По умолч.: `'ВПР42'` | Группа, которой выдано задание. В MVP поддерживается фиксированная группа `'ВПР42'`. |
+| `creator_id` | Идентификатор автора работы | UUID | **FK**, NOT NULL | Ссылка на пользователя-преподавателя (`users.id`). |
+| `is_deleted` | Признак мягкого удаления | Булево | NOT NULL, По умолч.: `false` | Позволяет скрыть работу из активного списка без нарушения целостности и потери отчетов студентов. |
+| `created_at` | Дата и время публикации | Дата и время (TZ) | NOT NULL, По умолч.: `NOW` | Момент публикации задания для студентов. |
+| `updated_at` | Дата и время изменения | Дата и время (TZ) | NOT NULL, По умолч.: `NOW` | Момент последнего редактирования задания преподавателем. |
+
+**Составное бизнес-ограничение уникальности:**
+* В рамках одной учебной группы не может существовать двух неудаленных работ с одинаковым порядковым номером: `UNIQUE (group_name, work_number) WHERE is_deleted = false`.
+
+---
+
+### 3.4. Сущность «Сдачи работ студентами» (`student_submissions`)
+**Описание:** Запись прогресса конкретного студента по конкретной лабораторной работе, включая статус, прикрепленный отчет и результат проверки.
+
+| Физическое имя | Логическое имя | Тип данных | Обязательность / Ключ | Бизнес-смысл и правила заполнения (валидация) |
+|---|---|---|:---:|---|
+| `id` | Идентификатор записи сдачи | UUID | **PK**, NOT NULL | Первичный ключ строки ведомости. |
+| `lab_work_id` | Идентификатор лабораторной работы | UUID | **FK**, NOT NULL | Ссылка на задание (`lab_works.id`). |
+| `student_id` | Идентификатор студента | UUID | **FK**, NOT NULL | Ссылка на студента-исполнителя (`users.id`). |
+| `status` | Статус выполнения работы | `submission_status` | NOT NULL, По умолч.: `'not_started'` | Текущее состояние работы в конечном автомате (5 допустимых статусов). |
+| `file_path` | Ключ объекта в хранилище MinIO | Строка (до 512) | Опционально / Условное | Относительный путь к файлу в S3/MinIO бакете. Формат ключа: `submissions/{lab_id}/{student_id}/{timestamp}_{filename}`. |
+| `file_name` | Исходное имя загруженного файла | Строка (до 255) | Опционально / Условное | Оригинальное имя файла студента при загрузке (например, `Иванов_ЛР1_Отчет.pdf`). |
+| `file_size_bytes` | Размер файла в байтах | Большое целое (Int64) | Опционально / Условное | Размер прикрепленного файла. **Бизнес-правило:** От 1 байта до 20 971 520 байт (строго не более 20 МБ). |
+| `file_mime_type` | MIME-тип файла | Строка (до 100) | Опционально / Условное | Разрешенные форматы: `application/pdf`, `application/vnd.openxmlformats-officedocument.wordprocessingml.document`, `application/zip`. |
+| `submitted_at` | Дата и время отправки отчета | Дата и время (TZ) | Опционально / Условное | Фиксирует точное время загрузки файла для сопоставления с дедлайном. |
+| `reviewed_at` | Дата и время рецензирования | Дата и время (TZ) | Опционально | Время выставления преподавателем статуса `accepted` или `needs_work`. |
+| `created_at` | Дата назначения работы | Дата и время (TZ) | NOT NULL, По умолч.: `NOW` | Момент генерации карточки (совпадает с моментом публикации работы). |
+| `updated_at` | Дата изменения статуса | Дата и время (TZ) | NOT NULL, По умолч.: `NOW` | Время любого обновления статуса или повторной загрузки отчета. |
+
+**Бизнес-правила консистентности:**
+1. **Уникальность назначения:** `UNIQUE (lab_work_id, student_id)`. Студент может иметь только одну карточку по конкретной работе.
+2. **Консистентность файла:** Если статус равен `submitted`, `needs_work` или `accepted`, атрибуты `file_path`, `file_name`, `file_size_bytes` и `submitted_at` **обязаны быть заполнены**. Для статусов `not_started` и `in_progress` данные поля могут быть `NULL`.
+
+---
+
+### 3.5. Сущность «Комментарии и замечания» (`comments`)
+**Описание:** Диалоговые замечания преподавателя и ответы студента к конкретному сданному отчету.
+
+| Физическое имя | Логическое имя | Тип данных | Обязательность / Ключ | Бизнес-смысл и правила заполнения (валидация) |
+|---|---|---|:---:|---|
+| `id` | Идентификатор комментария | UUID | **PK**, NOT NULL | Первичный ключ комментария. |
+| `submission_id` | Идентификатор сдачи | UUID | **FK**, NOT NULL | Ссылка на карточку сдачи (`student_submissions.id`). Каскадное удаление при удалении сдачи. |
+| `author_id` | Идентификатор автора комментария | UUID | **FK**, NOT NULL | Ссылка на пользователя (`users.id`), написавшего рецензию. |
+| `text` | Текст комментария / рецензии | Текст (TEXT) | NOT NULL | Содержание замечания. **Бизнес-правило:** От 5 до 2000 символов. При статусе «На доработке» наличие комментария строго обязательно. |
+| `created_at` | Дата и время отправки | Дата и время (TZ) | NOT NULL, По умолч.: `NOW` | Точное время публикации комментария (сортировка диалога по возрастанию). |
+| `updated_at` | Дата изменения комментария | Дата и время (TZ) | NOT NULL, По умолч.: `NOW` | Время последнего редактирования текста комментария. |
+
+---
+
+### 3.6. Сущность «Токены авторизации Telegram» (`telegram_auth_tokens`)
+**Описание:** Одноразовые токены безопасности для подтверждения владения аккаунтом через Telegram Deep-Link.
+
+| Физическое имя | Логическое имя | Тип данных | Обязательность / Ключ | Бизнес-смысл и правила заполнения (валидация) |
+|---|---|---|:---:|---|
+| `id` | Идентификатор токена | UUID | **PK**, NOT NULL | Первичный ключ сессии привязки. |
+| `user_id` | Идентификатор пользователя | UUID | **FK**, NOT NULL | Пользователь, запросивший связку (`users.id`). |
+| `token` | Секретный токен | Строка (до 64) | **UK**, NOT NULL | Криптографически стойкая уникальная строка, передаваемая в ссылке вида `https://t.me/LabFlowBot?start=<token>`. |
+| `expires_at` | Срок действия токена | Дата и время (TZ) | NOT NULL | **Бизнес-правило:** Время жизни токена составляет ровно 10 минут (`NOW() + INTERVAL '10 minutes'`). Просроченные токены отклоняются. |
+| `is_used` | Признак использования | Булево | NOT NULL, По умолч.: `false` | Одноразовость токена. После первого успешного вызова `/start` выставляется в `true`. |
+| `created_at` | Дата и время генерации | Дата и время (TZ) | NOT NULL, По умолч.: `NOW` | Момент генерации токена в веб-интерфейсе профиля. |
+
+---
+
+## 4. Бизнес-правила целостности и жизненного цикла данных (ТЗ для Backend-разработки)
+
+1. **Автоматическая инициализация ведомости (WBS 4.2.2):**
+   При создании преподавателем новой лабораторной работы (`lab_works`), бэкенд в рамках одной транзакции обязан создать записи в таблице `student_submissions` со статусом `not_started` для всех активных студентов (`role = 'student' AND is_active = true`), прикрепленных к данной учебной группе (`group_name = 'ВПР42'`).
+2. **Регистрация нового студента:**
+   Если студент регистрируется в системе позже публикации работ, для него автоматически инициализируются записи в `student_submissions` со статусом `not_started` по всем неудаленным работам группы ВПР42.
+3. **Мягкое удаление (Soft Delete):**
+   Физическое удаление записей из таблицы `lab_works` запрещено. Операция удаления переводит флаг `is_deleted = true`. При этом ранее загруженные студентами отчеты и выставленные оценки сохраняются.
+4. **Хранение файлов в MinIO (WBS 4.4.2):**
+   Файлы отчетов физически сохраняются в бакете `labflow-submissions`. В базе данных сохраняются только метаданные (`file_path`, `file_name`, `file_size_bytes`, `file_mime_type`). Запрещено хранить бинарные данные (BLOB) непосредственно в реляционной БД.
+
+---
+
+## 5. Рекомендации по оптимизации выборок и индексы
+
+Аналитик рекомендует заложить при генерации миграций следующие индексы для соблюдения NFR по скорости отклика (< 2 сек):
+
+1. **Поиск при аутентификации:** Уникальный индекс по `LOWER(email)` в таблице `users` (быстрый вход без учета регистра).
+2. **Поиск по Telegram Chat ID:** Частичный индекс `idx_users_telegram_chat_id` по `telegram_chat_id WHERE telegram_chat_id IS NOT NULL` (мгновенная обработка входящих сообщений бота).
+3. **Фильтрация дедлайнов группы:** Составной индекс `(group_name, deadline) WHERE is_deleted = false` в `lab_works`.
+4. **Личный кабинет студента:** Составной индекс `(student_id, status)` в `student_submissions` (быстрая фильтрация активных/сданных работ).
+5. **Сводная ведомость преподавателя:** Составной индекс `(lab_work_id, status)` в `student_submissions` (выборка работ, требующих проверки `status = 'submitted'`).
+6. **Погашение токена Telegram:** Частичный индекс `(token) WHERE is_used = false` в `telegram_auth_tokens`.
+
+---
+
+## 6. Трассировка сущностей к сценариям и задачам ИСР (WBS)
+
+| Сущность | Покрываемые функциональные требования | Пользовательские сценарии | Ответственный разработчик и задача ИСР |
 |---|---|---|---|
-| `id` | `UUID` | `PRIMARY KEY DEFAULT gen_random_uuid()` | Суррогатный первичный ключ учетной записи. |
-| `email` | `VARCHAR(255)` | `NOT NULL, UNIQUE` | Адрес электронной почты (логин). Индексируется в нижнем регистре. |
-| `password_hash` | `VARCHAR(255)` | `NOT NULL` | Криптографический хеш пароля (Argon2id или bcrypt с солью). Сырые пароли никогда не сохраняются. |
-| `full_name` | `VARCHAR(150)` | `NOT NULL, CHECK (char_length(trim(full_name)) >= 2)` | Полное имя (ФИО) студента или преподавателя. |
-| `role` | `user_role` | `NOT NULL` | Системная роль (`student` или `teacher`). |
-| `group_name` | `VARCHAR(50)` | `NULL` | Название учебной группы. **CHECK:** Обязательно заполнено для `role = 'student'` (для MVP фиксировано `'ВПР42'`). Для преподавателя равно `NULL`. |
-| `telegram_chat_id` | `BIGINT` | `NULL, UNIQUE` | Уникальный числовой ID чата в Telegram для отправки уведомлений через бота. Заполняется при связке аккаунтов. |
-| `telegram_username` | `VARCHAR(100)` | `NULL` | Никнейм пользователя в Telegram (без символа `@`) для визуального отображения в профиле. |
-| `is_active` | `BOOLEAN` | `NOT NULL DEFAULT TRUE` | Флаг активности аккаунта (блокировка при отчислении или увольнении). |
-| `created_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT CURRENT_TIMESTAMP` | Метка времени регистрации. |
-| `updated_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT CURRENT_TIMESTAMP` | Метка времени последнего изменения профиля. |
+| `users` | FR-01 (Аутентификация, роли, безопасность), FR-06 (Telegram ID) | UC-01, US-01, UC-07 | Мельников Д. (**4.1.2**) |
+| `lab_works` | FR-02 (CRUD работ, дедлайны, привязка к ВПР42) | UC-02, US-02, US-03 | Паршин А. (**4.2.2**) |
+| `student_submissions` | FR-03 (5 статусов), FR-04 (метаданные MinIO), FR-07 (дашборд), FR-08 (ведомость) | UC-03, UC-04, UC-05, US-04, US-05, US-07 | Паршин А. (**4.2.2**, **4.3.2**), Теплов А. (**4.4.2**) |
+| `comments` | FR-05 (Рецензирование и диалог замечаний) | UC-06, US-08 | Теплов А. (**4.4.2**) |
+| `telegram_auth_tokens` | FR-06 (Безопасная deep-link привязка бота) | UC-07, US-09 | Теплов А. (**4.5.2**) |
 
 ---
-
-### 3.3. Таблица `lab_works` (Лабораторные работы)
-
-Хранит методические описания заданий, дедлайны и привязку к учебной группе.
-
-| Поле | Тип данных | Ограничения | Назначение и бизнес-правила |
-|---|---|---|---|
-| `id` | `UUID` | `PRIMARY KEY DEFAULT gen_random_uuid()` | Уникальный идентификатор лабораторной работы. |
-| `work_number` | `INTEGER` | `NOT NULL, CHECK (work_number > 0)` | Порядковый номер работы в курсе (1, 2, 3...). |
-| `title` | `VARCHAR(255)` | `NOT NULL, CHECK (char_length(trim(title)) >= 3)` | Краткая тема/наименование работы (например, «ЛР №1: Основы Git»). |
-| `description` | `TEXT` | `NOT NULL` | Полное описание задания, методические указания, формат отчета и критерии защиты. |
-| `deadline` | `TIMESTAMPTZ` | `NOT NULL` | Плановый срок сдачи работы. При создании должно удовлетворять: `deadline > created_at`. |
-| `group_name` | `VARCHAR(50)` | `NOT NULL DEFAULT 'ВПР42'` | Учебная группа, которой назначена работа. |
-| `creator_id` | `UUID` | `NOT NULL, REFERENCES users(id) ON DELETE RESTRICT` | Преподаватель, создавший задание. Удаление преподавателя блокируется при наличии его работ. |
-| `is_deleted` | `BOOLEAN` | `NOT NULL DEFAULT FALSE` | Флаг мягкого удаления. Позволяет скрыть работу из активного списка без нарушения целостности сданных отчетов. |
-| `created_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT CURRENT_TIMESTAMP` | Дата и время публикации работы. |
-| `updated_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT CURRENT_TIMESTAMP` | Дата и время последней редакции задания/дедлайна. |
-
-**Составные ограничения:**
-- `UNIQUE (group_name, work_number)` среди неудаленных записей (`WHERE is_deleted = FALSE`). В рамках одной группы не может существовать двух активных работ с одинаковым номером.
-
----
-
-### 3.4. Таблица `student_submissions` (Сдачи работ студентами)
-
-Центральная таблица ведомости успеваемости, связывающая студента с конкретной лабораторной работой и хранящая статус выполнения, а также параметры загруженного файла в MinIO.
-
-| Поле | Тип данных | Ограничения | Назначение и бизнес-правила |
-|---|---|---|---|
-| `id` | `UUID` | `PRIMARY KEY DEFAULT gen_random_uuid()` | Уникальный идентификатор сдачи. |
-| `lab_work_id` | `UUID` | `NOT NULL, REFERENCES lab_works(id) ON DELETE RESTRICT` | Идентификатор лабораторной работы. |
-| `student_id` | `UUID` | `NOT NULL, REFERENCES users(id) ON DELETE RESTRICT` | Идентификатор студента. |
-| `status` | `submission_status` | `NOT NULL DEFAULT 'not_started'` | Текущий статус работы в конечном автомате. |
-| `file_path` | `VARCHAR(512)` | `NULL` | Ключ пути объекта в бакете MinIO: `submissions/{lab_id}/{student_id}/{timestamp}_{filename}`. Заполняется при отправке отчета. |
-| `file_name` | `VARCHAR(255)` | `NULL` | Оригинальное имя файла, загруженного студентом (например, `LR1_Ivanov.pdf`). |
-| `file_size_bytes` | `BIGINT` | `NULL, CHECK (file_size_bytes IS NULL OR (file_size_bytes > 0 AND file_size_bytes <= 20971520))` | Точный размер файла в байтах. Ограничение: до 20 МБ (20 971 520 байт). |
-| `file_mime_type` | `VARCHAR(100)` | `NULL` | MIME-тип файла: `application/pdf`, `application/vnd.openxmlformats-officedocument.wordprocessingml.document`, `application/zip`. |
-| `submitted_at` | `TIMESTAMPTZ` | `NULL` | Время последней успешной загрузки файла отчета студентом. |
-| `reviewed_at` | `TIMESTAMPTZ` | `NULL` | Время выставления итогового вердикта преподавателем (`accepted` или `needs_work`). |
-| `created_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT CURRENT_TIMESTAMP` | Момент инициализации сдачи (при создании работы или регистрации студента). |
-| `updated_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT CURRENT_TIMESTAMP` | Момент любого изменения статуса или повторной сдачи. |
-
-**Бизнес-ограничения целостности:**
-- `UNIQUE (lab_work_id, student_id)`: Студент имеет ровно одну связку с каждой лабораторной работой своей группы.
-- **CHECK по консистентности файлов:** Если статус равен `submitted`, `needs_work` или `accepted`, поля `file_path`, `file_name` и `submitted_at` **обязаны быть не NULL**.
-
----
-
-### 3.5. Таблица `comments` (Комментарии и рецензии)
-
-Хранит замечания и вердикты преподавателя по проверенным отчетам.
-
-| Поле | Тип данных | Ограничения | Назначение и бизнес-правила |
-|---|---|---|---|
-| `id` | `UUID` | `PRIMARY KEY DEFAULT gen_random_uuid()` | Уникальный идентификатор комментария. |
-| `submission_id` | `UUID` | `NOT NULL, REFERENCES student_submissions(id) ON DELETE CASCADE` | Ссылка на проверяемую сдачу. При удалении сдачи комментарии удаляются каскадно. |
-| `author_id` | `UUID` | `NOT NULL, REFERENCES users(id) ON DELETE RESTRICT` | Автор рецензии (преподаватель). |
-| `text` | `TEXT` | `NOT NULL, CHECK (char_length(trim(text)) >= 5 AND char_length(text) <= 2000)` | Текст комментария. При возврате на доработку обязателен (от 5 до 2000 символов). |
-| `created_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT CURRENT_TIMESTAMP` | Дата и время отправки комментария. |
-| `updated_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT CURRENT_TIMESTAMP` | Дата редактирования комментария (если применимо). |
-
----
-
-### 3.6. Таблица `telegram_auth_tokens` (Временные токены привязки Telegram)
-
-Обеспечивает безопасный процесс привязки Telegram-аккаунта через deep-link `/start <token>`.
-
-| Поле | Тип данных | Ограничения | Назначение и бизнес-правила |
-|---|---|---|---|
-| `id` | `UUID` | `PRIMARY KEY DEFAULT gen_random_uuid()` | Идентификатор сессии привязки. |
-| `user_id` | `UUID` | `NOT NULL, REFERENCES users(id) ON DELETE CASCADE` | Пользователь LabFlow, запросивший привязку. |
-| `token` | `VARCHAR(64)` | `NOT NULL, UNIQUE` | Криптографически стойкая случайная строка (HEX/UUID). |
-| `expires_at` | `TIMESTAMPTZ` | `NOT NULL` | Время истечения срока действия токена (TTL = 10 минут). |
-| `is_used` | `BOOLEAN` | `NOT NULL DEFAULT FALSE` | Флаг использования (одноразовый токен). |
-| `created_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT CURRENT_TIMESTAMP` | Время генерации. |
-
----
-
-## 4. Индексация и производительность
-
-Для обеспечения соответствия нефункциональному требованию времени отклика (< 2 с при локальном развертывании) спроектированы следующие индексы:
-
-1. **`idx_users_email_lower`**: `CREATE UNIQUE INDEX idx_users_email_lower ON users (LOWER(email));`
-   - Обеспечивает быстрый регистронезависимый поиск при авторизации (UC-01, WBS 4.1.2).
-2. **`idx_users_telegram_chat_id`**: `CREATE INDEX idx_users_telegram_chat_id ON users (telegram_chat_id) WHERE telegram_chat_id IS NOT NULL;`
-   - Обеспечивает мгновенный поиск пользователя при обработке входящих команд от бота.
-3. **`idx_lab_works_group_deadline`**: `CREATE INDEX idx_lab_works_group_deadline ON lab_works (group_name, deadline) WHERE is_deleted = FALSE;`
-   - Оптимизирует выборку списка активных работ группы, упорядоченных по приближению дедлайна (UC-03).
-4. **`idx_submissions_student`**: `CREATE INDEX idx_submissions_student ON student_submissions (student_id, status);`
-   - Ускоряет генерацию персонального дашборда студента и фильтрацию по статусу (UC-03, US-04).
-5. **`idx_submissions_lab_status`**: `CREATE INDEX idx_submissions_lab_status ON student_submissions (lab_work_id, status);`
-   - Оптимизирует построение сводной ведомости группы для преподавателя и фильтрацию работ, требующих проверки (`status = 'submitted'`) (UC-05, US-07).
-6. **`idx_comments_submission_created`**: `CREATE INDEX idx_comments_submission_created ON comments (submission_id, created_at ASC);`
-   - Обеспечивает хронологический вывод диалога замечаний в карточке сдачи (UC-06).
-7. **`idx_telegram_tokens_lookup`**: `CREATE INDEX idx_telegram_tokens_lookup ON telegram_auth_tokens (token) WHERE is_used = FALSE;`
-   - Быстрая проверка токена при переходе по ссылке в боте (UC-07).
-
----
-
-## 5. DDL-скрипт инициализации базы данных (PostgreSQL)
-
-Скрипт полностью готов для включения в миграции Alembic или файл инициализации контейнера Docker Compose `init-db.sql`.
-
-```sql
--- 1. Подключение расширения для генерации UUIDv4
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-
--- 2. Создание типов перечислений
-DO $$ BEGIN
-    CREATE TYPE user_role AS ENUM ('student', 'teacher');
-EXCEPTION
-    WHEN duplicate_object THEN NULL;
-END $$;
-
-DO $$ BEGIN
-    CREATE TYPE submission_status AS ENUM (
-        'not_started',
-        'in_progress',
-        'submitted',
-        'needs_work',
-        'accepted'
-    );
-EXCEPTION
-    WHEN duplicate_object THEN NULL;
-END $$;
-
--- 3. Функция автоматического обновления updated_at
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = CURRENT_TIMESTAMP;
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- 4. Таблица users
-CREATE TABLE IF NOT EXISTS users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    email VARCHAR(255) NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    full_name VARCHAR(150) NOT NULL CHECK (char_length(trim(full_name)) >= 2),
-    role user_role NOT NULL,
-    group_name VARCHAR(50) NULL,
-    telegram_chat_id BIGINT NULL UNIQUE,
-    telegram_username VARCHAR(100) NULL,
-    is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT chk_student_group CHECK (
-        (role = 'student' AND group_name IS NOT NULL AND char_length(trim(group_name)) > 0) OR
-        (role = 'teacher')
-    )
-);
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_lower ON users (LOWER(email));
-CREATE INDEX IF NOT EXISTS idx_users_telegram_chat_id ON users (telegram_chat_id) WHERE telegram_chat_id IS NOT NULL;
-
--- 5. Таблица lab_works
-CREATE TABLE IF NOT EXISTS lab_works (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    work_number INTEGER NOT NULL CHECK (work_number > 0),
-    title VARCHAR(255) NOT NULL CHECK (char_length(trim(title)) >= 3),
-    description TEXT NOT NULL,
-    deadline TIMESTAMPTZ NOT NULL,
-    group_name VARCHAR(50) NOT NULL DEFAULT 'ВПР42',
-    creator_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_lab_works_group_number_active 
-ON lab_works (group_name, work_number) WHERE is_deleted = FALSE;
-
-CREATE INDEX IF NOT EXISTS idx_lab_works_group_deadline 
-ON lab_works (group_name, deadline) WHERE is_deleted = FALSE;
-
--- 6. Таблица student_submissions
-CREATE TABLE IF NOT EXISTS student_submissions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    lab_work_id UUID NOT NULL REFERENCES lab_works(id) ON DELETE RESTRICT,
-    student_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-    status submission_status NOT NULL DEFAULT 'not_started',
-    file_path VARCHAR(512) NULL,
-    file_name VARCHAR(255) NULL,
-    file_size_bytes BIGINT NULL CHECK (file_size_bytes IS NULL OR (file_size_bytes > 0 AND file_size_bytes <= 20971520)),
-    file_mime_type VARCHAR(100) NULL,
-    submitted_at TIMESTAMPTZ NULL,
-    reviewed_at TIMESTAMPTZ NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT uq_lab_student UNIQUE (lab_work_id, student_id),
-    CONSTRAINT chk_submission_file_consistency CHECK (
-        (status IN ('not_started', 'in_progress')) OR
-        (status IN ('submitted', 'needs_work', 'accepted') AND file_path IS NOT NULL AND file_name IS NOT NULL AND submitted_at IS NOT NULL)
-    )
-);
-
-CREATE INDEX IF NOT EXISTS idx_submissions_student ON student_submissions (student_id, status);
-CREATE INDEX IF NOT EXISTS idx_submissions_lab_status ON student_submissions (lab_work_id, status);
-
--- 7. Таблица comments
-CREATE TABLE IF NOT EXISTS comments (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    submission_id UUID NOT NULL REFERENCES student_submissions(id) ON DELETE CASCADE,
-    author_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-    text TEXT NOT NULL CHECK (char_length(trim(text)) >= 5 AND char_length(text) <= 2000),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX IF NOT EXISTS idx_comments_submission_created ON comments (submission_id, created_at ASC);
-
--- 8. Таблица telegram_auth_tokens
-CREATE TABLE IF NOT EXISTS telegram_auth_tokens (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    token VARCHAR(64) NOT NULL UNIQUE,
-    expires_at TIMESTAMPTZ NOT NULL,
-    is_used BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX IF NOT EXISTS idx_telegram_tokens_lookup ON telegram_auth_tokens (token) WHERE is_used = FALSE;
-
--- 9. Триггеры обновления updated_at
-DROP TRIGGER IF EXISTS trg_users_updated_at ON users;
-CREATE TRIGGER trg_users_updated_at BEFORE UPDATE ON users
-FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-DROP TRIGGER IF EXISTS trg_lab_works_updated_at ON lab_works;
-CREATE TRIGGER trg_lab_works_updated_at BEFORE UPDATE ON lab_works
-FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-DROP TRIGGER IF EXISTS trg_student_submissions_updated_at ON student_submissions;
-CREATE TRIGGER trg_student_submissions_updated_at BEFORE UPDATE ON student_submissions
-FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-DROP TRIGGER IF EXISTS trg_comments_updated_at ON comments;
-CREATE TRIGGER trg_comments_updated_at BEFORE UPDATE ON comments
-FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-```
-
----
-
-## 6. Трассировка схемы данных к требованиям ТЗ и ИСР
-
-| Таблица БД | Покрываемые требования ТЗ | Прецеденты (Use Cases) | Задачи ИСР (WBS) |
-|---|---|---|---|
-| `users` | **FR-01** (Аутентификация/роли), **FR-06** (Telegram chat_id) | UC-01, UC-07 | 4.1.2, 4.5.2 |
-| `lab_works` | **FR-02** (CRUD работ, дедлайны, группа ВПР42) | UC-02 | 4.2.2 |
-| `student_submissions` | **FR-03** (5 статусов), **FR-04** (файлы MinIO), **FR-07** (список студента), **FR-08** (ведомость преподавателя) | UC-03, UC-04, UC-05, UC-06 | 4.2.2, 4.3.2, 4.4.2 |
-| `comments` | **FR-05** (Рецензирование и замечания) | UC-06 | 4.4.2, 4.4.3 |
-| `telegram_auth_tokens`| **FR-06** (Привязка Telegram через deep-link) | UC-07 | 4.5.2 |
-
----
-
-## 7. Рекомендации для команды разработки
-- **Для Backend (Теплов А.) / Lead Dev (Паршин А.):**
-  - При создании лабораторной работы (`POST /api/v1/labs`) бэкенд в рамках одной транзакции должен создавать запись в `lab_works` и генерировать записи `student_submissions` со статусом `not_started` для всех активных студентов указанной группы (`group_name = 'ВПР42'`).
-  - При повторной регистрации студента в группу ВПР42 система должна автоматически создавать для него записи в `student_submissions` по всем активным (`is_deleted = FALSE`) лабораторным работам.
-  - Удаление лабораторной работы (`DELETE /api/v1/labs/{id}`) обязательно реализуется как мягкое удаление: `UPDATE lab_works SET is_deleted = TRUE WHERE id = :id`.
-- **Для QA (Кулов Д.):**
-  - Включить в план негативного тестирования проверку ограничений:
-    1. Попытка создания двух активных работ с одинаковым номером для группы ВПР42 (ошибка 409/400).
-    2. Попытка отправки комментария короче 5 символов при отправке на доработку (ошибка 400).
-    3. Попытка перевода в статус `submitted` без прикрепленного файла (нарушение `chk_submission_file_consistency`).
-    4. Превышение лимита размера файла в 20 МБ.
