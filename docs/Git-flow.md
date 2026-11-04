@@ -104,9 +104,3 @@
 | **Restrict who can push to matching branches** (прямой push) | ❌ Заблокирован | ❌ Заблокирован |
 | **Allow force pushes** | ❌ Запрещен | ❌ Запрещен |
 | **Allow deletions** | ❌ Запрещен | ❌ Запрещен |
-
-### Инструкция по применению настроек в GitHub:
-1. Перейти в репозиторий: `Settings` → `Branches`.
-2. Нажать **Add branch protection rule**.
-3. В поле **Branch name pattern** указать `main`, выставить флаги из таблицы выше и сохранить.
-4. Повторить процедуру для `develop`.
