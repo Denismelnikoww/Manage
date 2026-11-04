@@ -1,3 +1,4 @@
+from app.schemas.auth import RoleResponse, TokenResponse, UserLogin, UserRegister, UserResponse
 from app.schemas.lab_work import (
     LabWorkBase,
     LabWorkCreate,
@@ -12,4 +13,9 @@ __all__ = [
     "LabWorkUpdate",
     "LabWorkResponse",
     "LabWorkListResponse",
+    "RoleResponse",
+    "TokenResponse",
+    "UserLogin",
+    "UserRegister",
+    "UserResponse",
 ]
