@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     # Academic defaults
     DEFAULT_GROUP_NAME: str = "ВПР42"
 
+    # Security / JWT (WBS 4.1.2)
+    SECRET_KEY: str = "super_secret_jwt_key_labflow_2026_change_in_production"
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
+
     model_config = SettingsConfigDict(
         case_sensitive=True,
         env_file=".env",

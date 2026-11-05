@@ -4,12 +4,15 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.core.database import Base, engine
+from app.core.seed import seed_roles_on_startup
 from app.api.v1.api import api_router
+from app.models import Role, User  # noqa: F401  (нужны для Base.metadata)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Initialize DB tables on application startup
     Base.metadata.create_all(bind=engine)
+    seed_roles_on_startup()
     yield
 
 app = FastAPI(
