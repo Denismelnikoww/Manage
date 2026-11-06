@@ -1,0 +1,1135 @@
+openapi: 3.0.3
+info:
+  title: LabFlow API
+  description: |
+    REST API веб-сервиса отслеживания и сдачи лабораторных работ **LabFlow** для академической группы ВПР42.
+    
+    ### Архитектурные особенности:
+    - **Аутентификация:** Bearer JWT (Access Token в заголовке `Authorization: Bearer <token>`).
+    - **Ролевая модель:** Две роли — `student` (Студент) и `teacher` (Преподаватель).
+    - **Хранилище файлов:** Объектное хранилище MinIO S3 (загрузка multipart/form-data до 20 МБ, отдача через pre-signed URL со сроком жизни 15 минут).
+    - **Уведомления:** Интеграция с Telegram Bot API (`aiogram3`) по событиям сдачи, рецензирования и комментирования.
+  version: 1.0.0
+  contact:
+    name: Команда разработки LabFlow
+    email: dev@labflow.local
+
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Локальный сервер разработки (Docker Compose)
+  - url: https://labflow.local/api/v1
+    description: Тестовый контур (Staging)
+
+tags:
+  - name: Auth
+    description: Регистрация, аутентификация и управление профилем пользователя
+  - name: Telegram
+    description: Привязка Telegram-аккаунта для доставки нотификаций
+  - name: Lab Works
+    description: Управление карточками лабораторных работ и дедлайнами (CRUD)
+  - name: Submissions
+    description: Сдача отчетов, просмотр ведомости и смена статусов жизненного цикла
+  - name: Comments
+    description: Рецензирование и комментарии преподавателя к работам
+
+paths:
+  /auth/register:
+    post:
+      tags:
+        - Auth
+      summary: Регистрация нового пользователя
+      description: Регистрация студента (с указанием группы ВПР42) или преподавателя.
+      operationId: registerUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRegisterRequest'
+      responses:
+        '201':
+          description: Пользователь успешно зарегистрирован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          description: Ошибка валидации данных или неверная группа
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Пользователь с таким email уже существует
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/login:
+    post:
+      tags:
+        - Auth
+      summary: Аутентификация пользователя (получение JWT)
+      description: Проверка учетных данных и выдача пары Access/Refresh JWT токенов.
+      operationId: loginUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserLoginRequest'
+      responses:
+        '200':
+          description: Успешная аутентификация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          description: Неверный email или пароль
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/me:
+    get:
+      tags:
+        - Auth
+      summary: Получение данных текущего пользователя
+      description: Возвращает профиль аутентифицированного пользователя по Bearer токену.
+      operationId: getCurrentUser
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Профиль текущего пользователя
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /telegram/link-token:
+    post:
+      tags:
+        - Telegram
+      summary: Генерация одноразового deep-link токена для Telegram
+      description: |
+        Генерирует временный токен со сроком жизни 10 минут и deep-link URL вида:
+        `https://t.me/LabFlowNotifierBot?start=<token>`.
+      operationId: generateTelegramLinkToken
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Токен и ссылка успешно сформированы
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TelegramLinkResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /telegram/unlink:
+    delete:
+      tags:
+        - Telegram
+      summary: Отвязка Telegram-аккаунта
+      description: Удаляет привязанный chat_id пользователя, останавливая отправку уведомлений в мессенджер.
+      operationId: unlinkTelegram
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          description: Telegram успешно отвязан
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /telegram/internal/bind:
+    post:
+      tags:
+        - Telegram
+      summary: Внутренний эндпоинт бота для привязки chat_id
+      description: Вызывается исключительно сервисом Telegram-бота (aiogram3) с секретным сервисным токеном.
+      operationId: internalBindTelegram
+      security:
+        - ServiceTokenAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TelegramInternalBindRequest'
+      responses:
+        '200':
+          description: Чат успешно привязан к пользователю
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          description: Недействительный или просроченный токен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+  /labs:
+    get:
+      tags:
+        - Lab Works
+      summary: Получение списка лабораторных работ
+      description: |
+        - **Студент:** возвращает работы, назначенные его группе, с персональным статусом выполнения.
+        - **Преподаватель:** возвращает список созданных работ с фильтрацией по группе.
+      operationId: getLabWorks
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: group_name
+          in: query
+          description: Фильтр по учебной группе (по умолчанию ВПР42)
+          required: false
+          schema:
+            type: string
+            default: ВПР42
+        - name: status
+          in: query
+          description: Фильтр по статусу сдачи (для студента)
+          required: false
+          schema:
+            $ref: '#/components/schemas/SubmissionStatus'
+      responses:
+        '200':
+          description: Список лабораторных работ
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LabWorkListItemResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+    post:
+      tags:
+        - Lab Works
+      summary: Создание новой лабораторной работы
+      description: |
+        Доступно **только преподавателю**. Создает карточку работы и автоматически генерирует
+        записи сдачи со статусом `not_started` для каждого студента группы.
+      operationId: createLabWork
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LabWorkCreateRequest'
+      responses:
+        '201':
+          description: Лабораторная работа успешно создана
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LabWorkResponse'
+        '400':
+          description: Ошибка валидации (например, дедлайн в прошлом)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+  /labs/{lab_id}:
+    parameters:
+      - name: lab_id
+        in: path
+        required: true
+        description: Уникальный идентификатор лабораторной работы (UUID)
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      tags:
+        - Lab Works
+      summary: Получение подробной информации о лабораторной работе
+      description: Доступно студенту (если работа назначена его группе) и преподавателю.
+      operationId: getLabWorkById
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Детальные сведения о лабораторной работе
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LabWorkResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+    put:
+      tags:
+        - Lab Works
+      summary: Полное обновление лабораторной работы
+      description: Доступно **только преподавателю**. Изменяет тему, описание или дедлайн.
+      operationId: updateLabWork
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LabWorkUpdateRequest'
+      responses:
+        '200':
+          description: Работа успешно обновлена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LabWorkResponse'
+        '400':
+          description: Некорректные параметры
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+    delete:
+      tags:
+        - Lab Works
+      summary: Мягкое удаление (soft delete) лабораторной работы
+      description: Доступно **только преподавателю**. Помечает работу флагом `is_deleted = true`.
+      operationId: deleteLabWork
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          description: Лабораторная работа успешно удалена
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /submissions:
+    get:
+      tags:
+        - Submissions
+      summary: Получение списка сдач / ведомости группы
+      description: |
+        - **Студент:** видит только свои сдачи по всем работам.
+        - **Преподаватель:** видит сводную ведомость по студентам группы и работам.
+      operationId: getSubmissions
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: lab_id
+          in: query
+          required: false
+          description: Фильтр по лабораторной работе
+          schema:
+            type: string
+            format: uuid
+        - name: student_id
+          in: query
+          required: false
+          description: Фильтр по студенту (только для преподавателя)
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          required: false
+          description: Фильтр по статусу работы
+          schema:
+            $ref: '#/components/schemas/SubmissionStatus'
+      responses:
+        '200':
+          description: Список сдач
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SubmissionResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /submissions/{submission_id}:
+    parameters:
+      - name: submission_id
+        in: path
+        required: true
+        description: Уникальный идентификатор сдачи студента (UUID)
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      tags:
+        - Submissions
+      summary: Получение детальной карточки сдачи
+      description: Возвращает данные сдачи, метаданные файла и список комментариев преподавателя.
+      operationId: getSubmissionById
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Карточка сдачи
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubmissionDetailResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /submissions/{submission_id}/status:
+    patch:
+      tags:
+        - Submissions
+      summary: Изменение статуса выполнения работы
+      description: |
+        Разрешенные переходы конечного автомата:
+        - **Студент:**
+          - `not_started` ➔ `in_progress` (кнопка «Взять в работу»)
+        - **Преподаватель:**
+          - `submitted` ➔ `accepted` (кнопка «Принять работу»)
+          - `submitted` ➔ `needs_work` (кнопка «Отправить на доработку», требует комментарий)
+      operationId: updateSubmissionStatus
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: submission_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmissionStatusUpdateRequest'
+      responses:
+        '200':
+          description: Статус успешно изменен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubmissionResponse'
+        '400':
+          description: Недопустимый переход между статусами
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /submissions/{submission_id}/upload:
+    post:
+      tags:
+        - Submissions
+      summary: Загрузка файла отчета студентом
+      description: |
+        Доступно **только студенту-владельцу** сдачи.
+        - Допустимые исходные статусы: `not_started`, `in_progress`, `needs_work`.
+        - Допустимые форматы: `.pdf`, `.docx`, `.zip`.
+        - Максимальный объем: 20 МБ.
+        - Файл сохраняется в MinIO, статус автоматически переводится в `submitted`, преподавателю отправляется нотификация в Telegram.
+      operationId: uploadSubmissionReport
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: submission_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Файл отчета (PDF, DOCX, ZIP до 20 МБ)
+      responses:
+        '200':
+          description: Файл успешно загружен, работа переведена в статус "Сдана"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubmissionResponse'
+        '400':
+          description: Недопустимый формат файла или превышен размер 20 МБ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          description: Повторная загрузка заблокирована в текущем статусе (работа уже сдана или принята)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /submissions/{submission_id}/download-url:
+    get:
+      tags:
+        - Submissions
+      summary: Получение временного pre-signed URL на скачивание файла
+      description: |
+        Генерирует временный защищенный URL из MinIO со сроком действия 15 минут.
+        - **Студент:** может скачивать только свой сданный отчет.
+        - **Преподаватель:** может скачивать отчет любого студента.
+      operationId: getSubmissionDownloadUrl
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: submission_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Pre-signed URL сформирован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PresignedDownloadResponse'
+        '400':
+          description: Файл отчета еще не был загружен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /submissions/{submission_id}/comments:
+    get:
+      tags:
+        - Comments
+      summary: Получение комментариев к сданной работе
+      description: Доступно студенту-владельцу и преподавателям.
+      operationId: getSubmissionComments
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: submission_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Список комментариев
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CommentResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+    post:
+      tags:
+        - Comments
+      summary: Добавление комментария преподавателя к работе
+      description: |
+        Доступно **только преподавателю**.
+        При отправке на доработку наличие содержательного комментария (минимум 5 символов) обязательно.
+        Инициирует отправку уведомления студенту в Telegram.
+      operationId: addSubmissionComment
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: submission_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommentCreateRequest'
+      responses:
+        '201':
+          description: Комментарий успешно сохранен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommentResponse'
+        '400':
+          description: Пустой комментарий или текст короче 5 символов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Введите access JWT токен, полученный при логине
+    ServiceTokenAuth:
+      type: apiKey
+      in: header
+      name: X-Service-Token
+      description: Секретный сервисный токен для межсервисного взаимодействия бэкенда и Telegram-бота
+
+  schemas:
+    UserRole:
+      type: string
+      enum:
+        - student
+        - teacher
+      description: Роль пользователя в системе LabFlow
+
+    SubmissionStatus:
+      type: string
+      enum:
+        - not_started
+        - in_progress
+        - submitted
+        - needs_work
+        - accepted
+      description: |
+        5 детерминированных статусов сдачи:
+        - `not_started`: Не начата
+        - `in_progress`: В работе
+        - `submitted`: Сдана
+        - `needs_work`: На доработке
+        - `accepted`: Принята
+
+    UserRegisterRequest:
+      type: object
+      required:
+        - email
+        - password
+        - full_name
+        - role
+      properties:
+        email:
+          type: string
+          format: email
+          example: student.ivanov@edu.local
+        password:
+          type: string
+          format: password
+          minLength: 8
+          example: SuperSecretPass123!
+        full_name:
+          type: string
+          minLength: 2
+          maxLength: 150
+          example: Иванов Иван Иванович
+        role:
+          $ref: '#/components/schemas/UserRole'
+        group_name:
+          type: string
+          nullable: true
+          example: ВПР42
+          description: Обязательно для роли student
+
+    UserLoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: student.ivanov@edu.local
+        password:
+          type: string
+          format: password
+          example: SuperSecretPass123!
+
+    TokenResponse:
+      type: object
+      required:
+        - access_token
+        - token_type
+        - expires_in
+        - user
+      properties:
+        access_token:
+          type: string
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        token_type:
+          type: string
+          example: Bearer
+        expires_in:
+          type: integer
+          description: Время жизни токена в секундах
+          example: 86400
+        user:
+          $ref: '#/components/schemas/UserResponse'
+
+    UserResponse:
+      type: object
+      required:
+        - id
+        - email
+        - full_name
+        - role
+        - is_telegram_linked
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 123e4567-e89b-12d3-a456-426614174000
+        email:
+          type: string
+          format: email
+          example: student.ivanov@edu.local
+        full_name:
+          type: string
+          example: Иванов Иван Иванович
+        role:
+          $ref: '#/components/schemas/UserRole'
+        group_name:
+          type: string
+          nullable: true
+          example: ВПР42
+        is_telegram_linked:
+          type: boolean
+          example: true
+        telegram_username:
+          type: string
+          nullable: true
+          example: ivan_student
+        created_at:
+          type: string
+          format: date-time
+          example: 2026-10-26T10:00:00Z
+
+    TelegramLinkResponse:
+      type: object
+      required:
+        - link_url
+        - token
+        - expires_at
+      properties:
+        link_url:
+          type: string
+          format: uri
+          example: https://t.me/LabFlowNotifierBot?start=9b1deb4d3b7d4bad9bdd2b0d7b3dcb6d
+        token:
+          type: string
+          example: 9b1deb4d3b7d4bad9bdd2b0d7b3dcb6d
+        expires_at:
+          type: string
+          format: date-time
+          example: 2026-11-04T12:10:00Z
+
+    TelegramInternalBindRequest:
+      type: object
+      required:
+        - token
+        - chat_id
+      properties:
+        token:
+          type: string
+          example: 9b1deb4d3b7d4bad9bdd2b0d7b3dcb6d
+        chat_id:
+          type: integer
+          format: int64
+          example: 987654321
+        telegram_username:
+          type: string
+          nullable: true
+          example: ivan_student
+
+    LabWorkCreateRequest:
+      type: object
+      required:
+        - work_number
+        - title
+        - description
+        - deadline
+        - group_name
+      properties:
+        work_number:
+          type: integer
+          minimum: 1
+          example: 1
+        title:
+          type: string
+          minLength: 3
+          maxLength: 255
+          example: "ЛР №1: Основы работы с Git и командная разработка"
+        description:
+          type: string
+          example: Настроить удаленный репозиторий, выполнить ветвление по Git-flow, решить merge conflict.
+        deadline:
+          type: string
+          format: date-time
+          example: 2026-11-15T23:59:59Z
+        group_name:
+          type: string
+          example: ВПР42
+
+    LabWorkUpdateRequest:
+      type: object
+      required:
+        - work_number
+        - title
+        - description
+        - deadline
+      properties:
+        work_number:
+          type: integer
+          example: 1
+        title:
+          type: string
+          example: "ЛР №1: Основы работы с Git и ветвление"
+        description:
+          type: string
+          example: Обновленные требования к отчету и скринам.
+        deadline:
+          type: string
+          format: date-time
+          example: 2026-11-18T23:59:59Z
+
+    LabWorkResponse:
+      type: object
+      required:
+        - id
+        - work_number
+        - title
+        - description
+        - deadline
+        - group_name
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 456e4567-e89b-12d3-a456-426614174001
+        work_number:
+          type: integer
+          example: 1
+        title:
+          type: string
+          example: "ЛР №1: Основы Git"
+        description:
+          type: string
+          example: Подробное методическое руководство...
+        deadline:
+          type: string
+          format: date-time
+          example: 2026-11-15T23:59:59Z
+        group_name:
+          type: string
+          example: ВПР42
+        created_at:
+          type: string
+          format: date-time
+          example: 2026-10-27T08:00:00Z
+        updated_at:
+          type: string
+          format: date-time
+          example: 2026-10-27T08:00:00Z
+
+    LabWorkListItemResponse:
+      type: object
+      required:
+        - id
+        - work_number
+        - title
+        - deadline
+        - group_name
+        - is_overdue
+      properties:
+        id:
+          type: string
+          format: uuid
+        work_number:
+          type: integer
+        title:
+          type: string
+        deadline:
+          type: string
+          format: date-time
+        group_name:
+          type: string
+        is_overdue:
+          type: boolean
+          example: false
+        days_until_deadline:
+          type: integer
+          example: 5
+        student_submission:
+          $ref: '#/components/schemas/SubmissionShortResponse'
+
+    SubmissionShortResponse:
+      type: object
+      required:
+        - id
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/SubmissionStatus'
+        submitted_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    SubmissionResponse:
+      type: object
+      required:
+        - id
+        - lab_work_id
+        - student_id
+        - student_name
+        - lab_work_title
+        - status
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 789e4567-e89b-12d3-a456-426614174002
+        lab_work_id:
+          type: string
+          format: uuid
+        lab_work_title:
+          type: string
+          example: "ЛР №1: Основы Git"
+        student_id:
+          type: string
+          format: uuid
+        student_name:
+          type: string
+          example: Иванов Иван
+        group_name:
+          type: string
+          example: ВПР42
+        status:
+          $ref: '#/components/schemas/SubmissionStatus'
+        file_name:
+          type: string
+          nullable: true
+          example: LR1_Ivanov_VPR42.pdf
+        file_size_bytes:
+          type: integer
+          nullable: true
+          example: 1048576
+        submitted_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+
+    SubmissionDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/SubmissionResponse'
+        - type: object
+          properties:
+            comments:
+              type: array
+              items:
+                $ref: '#/components/schemas/CommentResponse'
+
+    SubmissionStatusUpdateRequest:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          $ref: '#/components/schemas/SubmissionStatus'
+        comment_text:
+          type: string
+          nullable: true
+          example: Не забудьте приложить отчет по лабораторной работе.
+          description: Обязательно при смене статуса преподавателем на needs_work (минимум 5 символов).
+
+    PresignedDownloadResponse:
+      type: object
+      required:
+        - download_url
+        - file_name
+        - expires_in_seconds
+      properties:
+        download_url:
+          type: string
+          format: uri
+          example: https://minio.local/submissions/lab1/student1/timestamp_report.pdf?X-Amz-Signature=...
+        file_name:
+          type: string
+          example: LR1_Ivanov_VPR42.pdf
+        expires_in_seconds:
+          type: integer
+          example: 900
+
+    CommentCreateRequest:
+      type: object
+      required:
+        - text
+      properties:
+        text:
+          type: string
+          minLength: 5
+          maxLength: 2000
+          example: Исправьте раздел 3, добавьте скриншот выполнения git rebase.
+
+    CommentResponse:
+      type: object
+      required:
+        - id
+        - submission_id
+        - author_id
+        - author_name
+        - author_role
+        - text
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: a12e4567-e89b-12d3-a456-426614174003
+        submission_id:
+          type: string
+          format: uuid
+        author_id:
+          type: string
+          format: uuid
+        author_name:
+          type: string
+          example: Петров Петр (Преподаватель)
+        author_role:
+          $ref: '#/components/schemas/UserRole'
+        text:
+          type: string
+          example: Замечаний нет, работа защищена.
+        created_at:
+          type: string
+          format: date-time
+          example: 2026-10-28T14:30:00Z
+
+    ErrorResponse:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          example: VALIDATION_ERROR
+        message:
+          type: string
+          example: Некорректный формат или значение поля
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              issue:
+                type: string
+
+  responses:
+    UnauthorizedError:
+      description: Отсутствует или недействителен Bearer JWT токен
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: UNAUTHORIZED
+            message: Требуется аутентификация в системе
+
+    ForbiddenError:
+      description: Недостаточно прав для выполнения действия (ограничение роли или чужой ресурс)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: FORBIDDEN
+            message: Доступ запрещен для текущей роли пользователя
+
+    NotFoundError:
+      description: Запрашиваемый ресурс не найден
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: NOT_FOUND
+            message: Запрашиваемый ресурс не существует
