@@ -102,8 +102,8 @@
       "activeSavedViewId": null,
       "sort": [
         {
-          "key": "assignees",
-          "dir": "desc"
+          "key": "title",
+          "dir": "asc"
         }
       ],
       "group": {
