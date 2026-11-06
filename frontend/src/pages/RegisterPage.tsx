@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { mockApi } from '../api/mockApi';
+import './Auth.scss';
 
 export function RegisterPage() {
     const navigate = useNavigate();
@@ -25,16 +26,34 @@ export function RegisterPage() {
     };
 
     return (
-        <div style={{ maxWidth: 400, margin: '100px auto', padding: 20, border: '1px solid #ccc', borderRadius: 8 }}>
+        <div className="auth-container">
             <h2>Регистрация</h2>
-            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <input type="text" placeholder="Имя" value={name} onChange={e => setName(e.target.value)} required style={{ padding: 8 }} />
-                <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required style={{ padding: 8 }} />
-                <input type="password" placeholder="Пароль" value={password} onChange={e => setPassword(e.target.value)} required style={{ padding: 8 }} />
-                {error && <span style={{ color: 'red' }}>{error}</span>}
-                <button type="submit" style={{ padding: 10, cursor: 'pointer' }}>Зарегистрироваться</button>
+            <form onSubmit={handleSubmit}>
+                <input
+                    type="text"
+                    placeholder="Имя"
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                    required
+                />
+                <input
+                    type="email"
+                    placeholder="Email"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    required
+                />
+                <input
+                    type="password"
+                    placeholder="Пароль"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    required
+                />
+                {error && <span className="error-message">{error}</span>}
+                <button type="submit">Зарегистрироваться</button>
             </form>
-            <p style={{ marginTop: 10 }}>Уже есть аккаунт? <Link to="/login">Войти</Link></p>
+            <p>Уже есть аккаунт? <Link to="/login">Войти</Link></p>
         </div>
     );
 }

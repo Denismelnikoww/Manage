@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { mockApi } from '../api/mockApi';
+import './Auth.scss';
 
 export function LoginPage() {
     const navigate = useNavigate();
@@ -20,15 +21,27 @@ export function LoginPage() {
     };
 
     return (
-        <div style={{ maxWidth: 400, margin: '100px auto', padding: 20, border: '1px solid #ccc', borderRadius: 8 }}>
+        <div className="auth-container">
             <h2>Вход в систему</h2>
-            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required style={{ padding: 8 }} />
-                <input type="password" placeholder="Пароль" value={password} onChange={e => setPassword(e.target.value)} required style={{ padding: 8 }} />
-                {error && <span style={{ color: 'red' }}>{error}</span>}
-                <button type="submit" style={{ padding: 10, cursor: 'pointer' }}>Войти</button>
+            <form onSubmit={handleSubmit}>
+                <input
+                    type="email"
+                    placeholder="Email"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    required
+                />
+                <input
+                    type="password"
+                    placeholder="Пароль"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    required
+                />
+                {error && <span className="error-message">{error}</span>}
+                <button type="submit">Войти</button>
             </form>
-            <p style={{ marginTop: 10 }}>Нет аккаунта? <Link to="/register">Регистрация</Link></p>
+            <p>Нет аккаунта? <Link to="/register">Регистрация</Link></p>
         </div>
     );
 }
