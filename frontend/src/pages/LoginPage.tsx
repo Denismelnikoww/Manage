@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { mockApi } from '../api/mockApi';
+import { authApi } from '../api/authApi';
 import './Auth.scss';
 
 export function LoginPage() {
@@ -8,15 +8,21 @@ export function LoginPage() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
+        setLoading(true);
         try {
-            await mockApi.login(email, password);
+            const response = await authApi.login({ email, password });
+            localStorage.setItem('token', response.access_token);
+            localStorage.setItem('user', JSON.stringify(response.user));
             navigate('/works');
         } catch (err: any) {
             setError(err.message);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -39,7 +45,9 @@ export function LoginPage() {
                     required
                 />
                 {error && <span className="error-message">{error}</span>}
-                <button type="submit">Войти</button>
+                <button type="submit" disabled={loading}>
+                    {loading ? 'Загрузка...' : 'Войти'}
+                </button>
             </form>
             <p>Нет аккаунта? <Link to="/register">Регистрация</Link></p>
         </div>
