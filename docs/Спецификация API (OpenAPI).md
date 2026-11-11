@@ -1,11 +1,11 @@
 # Спецификация REST API (OpenAPI 3.0.3) — Проект LabFlow
 
-**Задача ИСР:** 3.1.3. [Аналитик] Описание API (OpenAPI-спецификация), схема БД, матрица ролей и прав доступа  
+**Задача ИСР:** 3.1.3. [Аналитик] Описание API (OpenAPI-спецификация), схема БД, матрица ролей и прав доступа; актуализация — [[6.1.1.-[аналитик]-ведение-документации-в-obsidian--user-stor|6.1.1]]  
 **Исполнитель:** Пашковский Владимир (Роль: Аналитик) при участии Паршина А. (Lead Dev) и Мельникова Д. (PM + Auth)  
-**Период выполнения:** 4–5 ноября 2026 г.  
+**Период выполнения:** 4–5 ноября 2026 г. (ревизия синхронизации — 11 ноября 2026 г.)  
 **Продукт:** Веб-сервис трекинга лабораторных работ LabFlow  
-**Исходный файл контракта:** [openapi.yaml](file:///A:/sadovaya/LabFlow/Проект/openapi.yaml)  
-**Статус документа:** Утверждено для генерации клиентских типов (TypeScript) и валидации серверных схем (Pydantic / FastAPI)  
+**Исходный файл контракта:** [openapi.yaml](openapi.yaml)  
+**Статус документа:** Целевой контракт v1.0.0; зафиксированы расхождения с ранним каркасом бэкенда для сверки в задачах [[wbs-4-4-8|4.4.8]] и [[wbs-4-6-1|4.6.1]]  
 
 ---
 
@@ -170,13 +170,13 @@
 #### `POST /submissions/{id}/upload` — Загрузка файла отчета
 - **Формат запроса:** `multipart/form-data`, поле `file`.
 - **Ограничения:** Допустимые форматы: `.pdf`, `.docx`, `.zip`. Максимальный размер: **20 МБ** (20 971 520 байт).
-- **Результат:** Файл загружается в MinIO по ключу `submissions/{lab_id}/{student_id}/{timestamp}_{filename}`, статус переводится в `submitted`, преподавателю направляется нотификация в Telegram.
+- **Результат:** Файл загружается в приватный бакет MinIO (`MINIO_BUCKET_REPORTS`, по умолчанию `labflow-reports`) по ключу `submissions/{lab_id}/{student_id}/{timestamp}_{short_uuid}_{filename}`, статус переводится в `submitted`, преподавателю направляется нотификация `NEW_SUBMISSION` в Telegram. Подробности валидации и версий — в [[Требования к загрузке и скачиванию файлов (MinIO)]].
 
 #### `GET /submissions/{id}/download-url` — Скачивание отчета
 - **Ответ (`200 OK` ➔ `PresignedDownloadResponse`):**
   ```json
   {
-    "download_url": "https://minio.local/labflow-submissions/submissions/lab1/student1/timestamp_report.pdf?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=...&X-Amz-Signature=...",
+    "download_url": "https://minio.local/labflow-reports/submissions/lab1/student1/timestamp_report.pdf?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=...&X-Amz-Signature=...",
     "file_name": "LR1_Ivanov_VPR42.pdf",
     "expires_in_seconds": 900
   }
@@ -239,8 +239,24 @@
 
 ---
 
-## 6. Связанные проектные документы
-- Полный YAML-файл спецификации: [openapi.yaml](file:///A:/sadovaya/LabFlow/Проект/openapi.yaml)
+## 6. Синхронизация с фактической реализацией бэкенда (Ревизия WBS 6.1.1)
+
+В рамках ведения документации ([[6.1.1.-[аналитик]-ведение-документации-в-obsidian--user-stor|WBS 6.1.1]]) выполнена сверка целевого контракта `openapi.yaml` с кодовой базой `backend/` после завершения задач `4.1.2` и `4.2.2`:
+
+| Область | Целевой контракт (`openapi.yaml`) | Текущая реализация в `backend/` | План выравнивания |
+|---|---|---|---|
+| **Auth (`4.1.2`)** | `POST /auth/register`, `POST /auth/login`, `GET /auth/me`; `id: uuid`, `role` как строка | Реализованы `/auth/register` и `/auth/login`; `id: int`, `role` как объект `RoleResponse {id, code, title}`, поле `telegram_id`; `/auth/me` пока отсутствует | Добавить `/auth/me` в `4.1.3`; согласовать формат `UserResponse` на `4.6.1` |
+| **Works (`4.2.2`)** | Префикс `/labs`, поля `work_number`, `id: uuid`, метод `PUT /labs/{lab_id}` | Реализован префикс `/works`, поля `order_num`, `id: int`, метод `PATCH /works/{work_id}`, обёртка `LabWorkListResponse {total, items}` | Унифицировать маршруты и схемы на задаче [[wbs-4-6-1|4.6.1]] (до интеграции с фронтендом) |
+| **Авторизация в `/works`** | Обязательный `BearerAuth` JWT для всех запросов | В `works.py` временно используется заголовок-заглушка `X-User-Role` | Заменить на реальную проверку JWT в задаче `4.1.3` |
+| **Имена окружения (`.env.example`)** | `LabFlowNotifierBot`, бакет `labflow-submissions` | `TELEGRAM_BOT_USERNAME=LabFlowBot`, `MINIO_BUCKET_REPORTS=labflow-reports` | В документации унифицированы имена из `.env.example` |
+
+---
+
+## 7. Связанные проектные документы
+- Полный YAML-файл спецификации: [openapi.yaml](openapi.yaml)
 - Реляционная модель данных: [[Схема базы данных (ERD)|Схема базы данных (ERD)]]
 - Матрица прав доступа: [[Матрица ролей и прав доступа|Матрица ролей и прав доступа]]
+- Требования к файлам (MinIO): [[Требования к загрузке и скачиванию файлов (MinIO)]]
+- Спецификация Telegram-уведомлений: [[Спецификация Telegram-уведомлений (Триггеры и шаблоны)]]
+- Матрица трассировки требований: [[Матрица трассировки требований (RTM)]]
 - Пользовательские сценарии: [[Use Cases|Use Cases]] и [[User Stories|User Stories]]
