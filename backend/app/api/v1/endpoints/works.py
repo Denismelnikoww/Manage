@@ -1,10 +1,12 @@
 from typing import Optional, List, Literal
-from fastapi import APIRouter, Depends, HTTPException, Query, status, Header
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, asc
 
+from app.api.deps import CurrentUser, require_teacher
 from app.core.database import get_db
 from app.models.lab_work import LabWork
+from app.models.user import User
 from app.schemas.lab_work import (
     LabWorkCreate,
     LabWorkUpdate,
@@ -13,21 +15,6 @@ from app.schemas.lab_work import (
 )
 
 router = APIRouter()
-
-def get_current_role(x_user_role: Optional[str] = Header(default="teacher")) -> str:
-    """
-    Mock dependency for user role verification (AC 1.3, UC-01/UC-02).
-    Will be connected to JWT token validation upon Auth module completion.
-    """
-    return x_user_role.lower() if x_user_role else "teacher"
-
-def require_teacher(role: str = Depends(get_current_role)):
-    if role != "teacher":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Действие доступно только пользователю с ролью преподавателя (403 Forbidden)"
-        )
-    return role
 
 @router.post(
     "",
@@ -38,7 +25,7 @@ def require_teacher(role: str = Depends(get_current_role)):
 def create_lab_work(
     data: LabWorkCreate,
     db: Session = Depends(get_db),
-    _: str = Depends(require_teacher)
+    _: User = Depends(require_teacher)
 ):
     """
     Создание и публикация новой лабораторной работы.
@@ -64,6 +51,7 @@ def create_lab_work(
     summary="Получение списка лабораторных работ (UC-03 / US-04)"
 )
 def get_lab_works(
+    current_user: CurrentUser,
     group_name: Optional[str] = Query("ВПР42", description="Фильтр по учебной группе"),
     sort_by: Literal["order_num", "deadline"] = Query("order_num", description="Поле сортировки"),
     sort_desc: bool = Query(False, description="Сортировка по убыванию"),
@@ -90,6 +78,7 @@ def get_lab_works(
 )
 def get_lab_work(
     work_id: int,
+    current_user: CurrentUser,
     db: Session = Depends(get_db)
 ):
     """
@@ -112,7 +101,7 @@ def update_lab_work(
     work_id: int,
     data: LabWorkUpdate,
     db: Session = Depends(get_db),
-    _: str = Depends(require_teacher)
+    _: User = Depends(require_teacher)
 ):
     """
     Редактирование описания, названия или продление дедлайна работы (AC 3.1).
@@ -141,7 +130,7 @@ def update_lab_work(
 def delete_lab_work(
     work_id: int,
     db: Session = Depends(get_db),
-    _: str = Depends(require_teacher)
+    _: User = Depends(require_teacher)
 ):
     """
     Мягкое удаление (soft delete) лабораторной работы.
