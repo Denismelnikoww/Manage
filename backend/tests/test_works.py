@@ -230,3 +230,145 @@ def test_delete_lab_work_soft_delete():
     # After soft deletion, getting details should return 404
     get_res = client.get("/api/v1/works/1", headers=auth_headers("teacher"))
     assert get_res.status_code == 404
+
+
+# --- WBS 4.2.3: фильтрация и сортировка ---
+
+def _create_work(order_num: int, title: str, days: int, group: str = "ВПР42") -> dict:
+    deadline = (datetime.now(timezone.utc) + timedelta(days=days)).isoformat()
+    response = client.post(
+        "/api/v1/works",
+        json={
+            "order_num": order_num,
+            "title": title,
+            "description": "Описание для теста фильтрации и сортировки работ",
+            "deadline": deadline,
+            "group_name": group,
+        },
+        headers=auth_headers("teacher"),
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+def test_list_sort_by_deadline_asc():
+    """Сортировка по дедлайну по возрастанию (ближайшие первыми)."""
+    early = _create_work(101, "Сорт ранняя ЛР", days=3)
+    late = _create_work(102, "Сорт поздняя ЛР", days=30)
+
+    response = client.get(
+        "/api/v1/works?group_name=ВПР42&sort_by=deadline&sort_desc=false",
+        headers=auth_headers("student"),
+    )
+    assert response.status_code == 200
+    items = response.json()["items"]
+    ids = [item["id"] for item in items]
+    assert ids.index(early["id"]) < ids.index(late["id"])
+
+
+def test_list_sort_by_deadline_desc():
+    """Сортировка по дедлайну по убыванию."""
+    early = _create_work(103, "Сорт desc ранняя", days=4)
+    late = _create_work(104, "Сорт desc поздняя", days=40)
+
+    response = client.get(
+        "/api/v1/works?group_name=ВПР42&sort_by=deadline&sort_desc=true",
+        headers=auth_headers("student"),
+    )
+    assert response.status_code == 200
+    items = response.json()["items"]
+    ids = [item["id"] for item in items]
+    assert ids.index(late["id"]) < ids.index(early["id"])
+
+
+def test_list_filter_deadline_to():
+    """Фильтр deadline_to оставляет только работы с дедлайном не позже границы."""
+    near = _create_work(105, "Дедлайн близко", days=2)
+    far = _create_work(106, "Дедлайн далеко", days=60)
+    boundary = (datetime.now(timezone.utc) + timedelta(days=10)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    response = client.get(
+        "/api/v1/works",
+        params={"group_name": "ВПР42", "deadline_to": boundary},
+        headers=auth_headers("student"),
+    )
+    assert response.status_code == 200, response.text
+    ids = {item["id"] for item in response.json()["items"]}
+    assert near["id"] in ids
+    assert far["id"] not in ids
+
+
+def test_list_filter_overdue_false():
+    """overdue=false — только работы с актуальным дедлайном."""
+    work = _create_work(107, "Актуальная работа", days=5)
+    response = client.get(
+        "/api/v1/works?group_name=ВПР42&overdue=false",
+        headers=auth_headers("student"),
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] >= 1
+    assert all(item["is_overdue"] is False for item in data["items"])
+    assert any(item["id"] == work["id"] for item in data["items"])
+
+
+def test_list_item_has_deadline_fields_and_submission():
+    """В списке есть is_overdue, days_until_deadline и student_submission."""
+    work = _create_work(108, "Поля списка", days=8)
+    response = client.get(
+        "/api/v1/works?group_name=ВПР42",
+        headers=auth_headers("student"),
+    )
+    assert response.status_code == 200
+    item = next(i for i in response.json()["items"] if i["id"] == work["id"])
+    assert "is_overdue" in item
+    assert item["is_overdue"] is False
+    assert item["days_until_deadline"] is not None
+    assert item["student_submission"] is not None
+    assert item["student_submission"]["status"] == "not_started"
+
+
+def test_list_filter_by_status_student():
+    """Студент фильтрует список по статусу своей сдачи."""
+    from app.models.submission import StudentSubmission
+
+    work = _create_work(109, "Фильтр по статусу", days=12)
+
+    db = TestingSessionLocal()
+    try:
+        sub = (
+            db.query(StudentSubmission)
+            .filter(
+                StudentSubmission.lab_work_id == work["id"],
+                StudentSubmission.student_id == 1,
+            )
+            .one()
+        )
+        sub.status = "in_progress"
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get(
+        "/api/v1/works?group_name=ВПР42&status=in_progress",
+        headers=auth_headers("student"),
+    )
+    assert response.status_code == 200
+    ids = {item["id"] for item in response.json()["items"]}
+    assert work["id"] in ids
+
+    response_ns = client.get(
+        "/api/v1/works?group_name=ВПР42&status=accepted",
+        headers=auth_headers("student"),
+    )
+    assert response_ns.status_code == 200
+    ids_ns = {item["id"] for item in response_ns.json()["items"]}
+    assert work["id"] not in ids_ns
+
+
+def test_list_filter_invalid_status_rejected():
+    response = client.get(
+        "/api/v1/works?status=unknown_status",
+        headers=auth_headers("student"),
+    )
+    assert response.status_code == 422
