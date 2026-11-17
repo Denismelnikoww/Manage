@@ -1,25 +1,18 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { worksApi } from '../api/worksApi';
-import type { WorkResponse, SubmissionStatus } from '../api/worksApi';
+import type { WorkResponse } from '../api/worksApi';
+import { submissionsApi, STATUS_LABELS } from '../api/submissionsApi';
+import type { SubmissionStatus } from '../api/submissionsApi';
 import './Works.scss';
-
-const STATUS_LABELS: Record<SubmissionStatus, string> = {
-    not_started: 'Не начата',
-    in_progress: 'В работе',
-    submitted: 'Сдана',
-    needs_work: 'На доработке',
-    accepted: 'Принята'
-};
 
 export function WorksPage() {
     const navigate = useNavigate();
     const [works, setWorks] = useState<WorkResponse[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-    const [filter, setFilter] = useState<SubmissionStatus | 'ALL'>('ALL');
 
-    // Получаем инфу о юзере для рендера ролей
+    // Получаем инфу о юзере
     const userStr = localStorage.getItem('user');
     const user = userStr ? JSON.parse(userStr) : null;
     const isTeacher = user?.role?.code === 'teacher';
@@ -44,6 +37,16 @@ export function WorksPage() {
         }
     };
 
+    const handleStatusChange = async (submissionId: number, newStatus: SubmissionStatus, comment?: string) => {
+        try {
+            await submissionsApi.updateStatus(submissionId, newStatus, comment);
+            // Перезапрашиваем список, чтобы увидеть обновленный статус
+            loadWorks();
+        } catch (err: any) {
+            alert(`Ошибка: ${err.message}`);
+        }
+    };
+
     const handleLogout = () => {
         localStorage.clear();
         navigate('/login');
@@ -51,14 +54,6 @@ export function WorksPage() {
 
     if (loading) return <div className="loading">Загрузка...</div>;
     if (error) return <div className="error-message" style={{ margin: 40, textAlign: 'center' }}>Ошибка: {error}</div>;
-
-    // Фильтрация: у преподавателя нет student_submission, поэтому фильтруем только если это студент
-    const filteredWorks = works.filter(w => {
-        if (filter === 'ALL') return true;
-        // Если у преподавателя нет сдачи, показываем все, либо адаптируем под его логику
-        if (isTeacher) return true;
-        return w.student_submission?.status === filter;
-    });
 
     return (
         <div className="works-container">
@@ -72,37 +67,68 @@ export function WorksPage() {
                 <button onClick={handleLogout} className="secondary">Выйти</button>
             </div>
 
-            <div className="filters-panel">
-                <button className={filter === 'ALL' ? 'active' : ''} onClick={() => setFilter('ALL')}>Все</button>
-                {Object.entries(STATUS_LABELS).map(([key, label]) => (
-                    <button key={key} className={filter === key ? 'active' : ''} onClick={() => setFilter(key as SubmissionStatus)}>
-                        {label}
-                    </button>
-                ))}
-            </div>
-
             <div className="works-grid">
-                {filteredWorks.length === 0 ? (
+                {works.length === 0 ? (
                     <p>Работ нет</p>
                 ) : (
-                    filteredWorks.map(w => (
-                        <div key={w.id} className="work-card">
-                            <div className="work-card-header">
-                                <h3>ЛР №{w.order_num}: {w.title}</h3>
-                                {w.is_overdue && <span className="badge-overdue">Просрочено</span>}
-                            </div>
-                            <p>{w.description}</p>
+                    works.map(w => {
+                        const sub = w.student_submission;
 
-                            <div className="work-footer">
-                                <strong>До: {new Date(w.deadline).toLocaleDateString('ru-RU')}</strong>
-                                {w.student_submission ? (
-                                    <span className="status-badge">{STATUS_LABELS[w.student_submission.status]}</span>
-                                ) : (
-                                    <span className="status-badge teacher-view">Ведомость</span>
+                        return (
+                            <div key={w.id} className="work-card">
+                                <div className="work-card-header">
+                                    <h3>ЛР №{w.order_num}: {w.title}</h3>
+                                    {w.is_overdue && <span className="badge-overdue">Просрочено</span>}
+                                </div>
+                                <p>{w.description}</p>
+
+                                <div className="work-footer">
+                                    <strong>До: {new Date(w.deadline).toLocaleDateString('ru-RU')}</strong>
+                                    {sub ? (
+                                        <span className="status-badge">{STATUS_LABELS[sub.status]}</span>
+                                    ) : (
+                                        <span className="status-badge teacher-view">Ведомость</span>
+                                    )}
+                                </div>
+
+                                {/* --- Кнопки для Студента --- */}
+                                {!isTeacher && sub && sub.status === 'not_started' && (
+                                    <button
+                                        className="btn-action student"
+                                        onClick={() => handleStatusChange(sub.id, 'in_progress')}
+                                    >
+                                        Взять в работу
+                                    </button>
+                                )}
+
+                                {/* --- Кнопки для Преподавателя --- */}
+                                {/* Внимание: пока бэк не отдает список сдач для препода, эта кнопка появится только если он зайдет под студентом (для теста) */}
+                                {isTeacher && sub && sub.status === 'submitted' && (
+                                    <div className="teacher-actions">
+                                        <button
+                                            className="btn-action accept"
+                                            onClick={() => handleStatusChange(sub.id, 'accepted')}
+                                        >
+                                            Принять
+                                        </button>
+                                        <button
+                                            className="btn-action rework"
+                                            onClick={() => {
+                                                const comment = prompt('Введите комментарий (обязательно):');
+                                                if (comment && comment.trim().length >= 5) {
+                                                    handleStatusChange(sub.id, 'needs_work', comment);
+                                                } else {
+                                                    alert('Комментарий должен быть от 5 символов');
+                                                }
+                                            }}
+                                        >
+                                            На доработку
+                                        </button>
+                                    </div>
                                 )}
                             </div>
-                        </div>
-                    ))
+                        );
+                    })
                 )}
             </div>
         </div>
