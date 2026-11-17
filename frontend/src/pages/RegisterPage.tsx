@@ -24,13 +24,17 @@ export function RegisterPage() {
         setError('');
         setLoading(true);
         try {
+            // 1. Регистрация
             await authApi.register({
                 ...form,
                 group_name: form.role === 'student' ? form.group_name : undefined
             });
-            const loginRes = await authApi.login({ email: form.email, password: form.password });
-            localStorage.setItem('token', loginRes.access_token);
-            localStorage.setItem('user', JSON.stringify(loginRes.user));
+
+            // 2. Сразу логин, чтобы получить токен
+            const loginData = await authApi.login({ email: form.email, password: form.password });
+            localStorage.setItem('token', loginData.access_token);
+            localStorage.setItem('user', JSON.stringify(loginData.user));
+
             navigate('/works');
         } catch (err: any) {
             setError(err.message);
@@ -47,7 +51,7 @@ export function RegisterPage() {
                 <input name="email" type="email" placeholder="Email" value={form.email} onChange={handleChange} required />
                 <input name="password" type="password" placeholder="Пароль (мин. 8 символов)" value={form.password} onChange={handleChange} required minLength={8} />
 
-                <select name="role" value={form.role} onChange={handleChange} className="role-select">
+                <select name="role" value={form.role} onChange={handleChange}>
                     <option value="student">Студент</option>
                     <option value="teacher">Преподаватель</option>
                 </select>

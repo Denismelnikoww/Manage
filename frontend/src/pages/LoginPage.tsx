@@ -15,9 +15,12 @@ export function LoginPage() {
         setError('');
         setLoading(true);
         try {
-            const response = await authApi.login({ email, password });
-            localStorage.setItem('token', response.access_token);
-            localStorage.setItem('user', JSON.stringify(response.user));
+            const data = await authApi.login({ email, password });
+            // Сохраняем токен
+            localStorage.setItem('token', data.access_token);
+            // Сохраняем данные юзера (роль, имя и т.д.)
+            localStorage.setItem('user', JSON.stringify(data.user));
+
             navigate('/works');
         } catch (err: any) {
             setError(err.message);
@@ -30,20 +33,8 @@ export function LoginPage() {
         <div className="auth-container">
             <h2>Вход в систему</h2>
             <form onSubmit={handleSubmit}>
-                <input
-                    type="email"
-                    placeholder="Email"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    required
-                />
-                <input
-                    type="password"
-                    placeholder="Пароль"
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    required
-                />
+                <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required />
+                <input type="password" placeholder="Пароль" value={password} onChange={e => setPassword(e.target.value)} required />
                 {error && <span className="error-message">{error}</span>}
                 <button type="submit" disabled={loading}>
                     {loading ? 'Загрузка...' : 'Войти'}
