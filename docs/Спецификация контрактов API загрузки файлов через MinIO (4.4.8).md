@@ -334,175 +334,85 @@ GET /api/v1/submissions/{submission_id}/comments
 
 ---
 
-## 3. Pydantic v2 схемы (Спецификация для Backend FastAPI)
+## 3. Спецификация структур данных (Data Dictionary для Backend)
 
-Ниже представлены канонические схемы данных для интеграции в `backend/app/schemas/`:
+Настоящий раздел фиксирует требования к структурам данных, ограничениям и валидаторам, которые бэкенд-разработчик реализует в рамках задачи **4.4.3** (`backend/app/schemas/`):
 
-```python
-from datetime import datetime
-from typing import List, Optional
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+### 3.1. Модель версии отчёта (`Report` / `ReportResponse`)
+Представляет метаданные конкретного файла отчёта, привязанного к сдаче:
 
+| Поле | Тип | Обязательность | Ограничения и правила валидации | Описание |
+|---|---|:---:|---|---|
+| `id` | `integer` | Да | PK, auto-increment | Идентификатор версии отчёта |
+| `submission_id` | `integer` | Да | FK ➔ `student_submissions.id` | Ссылка на карточку сдачи |
+| `version_number` | `integer` | Да | `>= 1`, автоинкремент для сдачи | Порядковый номер версии отчёта (1, 2, ...) |
+| `file_name` | `string` | Да | Длина: 1..255 символов | Оригинальное отображаемое имя файла |
+| `file_size_bytes` | `integer` | Да | `1 ≤ size ≤ 20 971 520` (до 20 МБ) | Физический размер файла в байтах |
+| `file_mime_type` | `string` | Да | Длина: до 120 символов | MIME-тип содержимого (`application/pdf`, и т.д.) |
+| `file_sha256` | `string` | Да | Ровно 64 hex-символа | Контрольная сумма SHA-256 для верификации целостности |
+| `uploaded_at` | `datetime` | Да | UTC timestamp с таймзоной | Дата и время фактической загрузки |
 
-class ReportBase(BaseModel):
-    file_name: str = Field(..., max_length=255, description="Оригинальное имя файла отчёта")
-    file_size_bytes: int = Field(..., ge=1, le=20_971_520, description="Размер файла в байтах (до 20 МБ)")
-    file_mime_type: str = Field(..., max_length=120, description="MIME-тип содержимого")
-    file_sha256: str = Field(..., min_length=64, max_length=64, description="Контрольная сумма SHA-256")
+### 3.2. Модель ответа при скачивании (`PresignedDownloadResponse`)
+Возвращается клиенту для безопасного прямого скачивания файла из хранилища:
 
+| Поле | Тип | Обязательность | Формат / Значение | Описание |
+|---|---|:---:|---|---|
+| `download_url` | `string (URI)` | Да | Сформированный AWS SigV4 URL | Временная ссылка на скачивание файла из MinIO |
+| `file_name` | `string` | Да | Исходное имя файла | Имя для заголовка `Content-Disposition` |
+| `file_size_bytes` | `integer` | Да | Целое число байт | Размер скачиваемого файла |
+| `file_sha256` | `string` | Да | 64 hex-символа | Контрольная сумма SHA-256 |
+| `expires_in_seconds` | `integer` | Да | Константа: `900` | Срок действия ссылки в секундах (15 минут) |
 
-class ReportResponse(ReportBase):
-    id: int
-    submission_id: int
-    version_number: int = Field(..., ge=1, description="Порядковый номер версии отчёта")
-    uploaded_at: datetime
+### 3.3. Модель ответа при загрузке (`SubmissionUploadResponse`)
+Возвращается при успешной отправке отчёта студентом (`POST .../upload`):
 
-    model_config = ConfigDict(from_attributes=True)
+| Поле | Тип | Обязательность | Описание |
+|---|---|:---:|---|
+| `submission` | `SubmissionResponse` | Да | Актуализированная карточка сдачи (статус `submitted`, даты) |
+| `report` | `ReportResponse` | Да | Созданная запись версии отчёта с метаданными и хешем |
+| `message` | `string` | Да | Уведомление: «Отчёт успешно загружен и передан на проверку» |
 
+### 3.4. Модели рецензирования и комментариев (`Comment`)
+Используются при проверке работ преподавателем:
 
-class ReportVersionListResponse(BaseModel):
-    total: int
-    items: List[ReportResponse]
+- **Создание комментария (`CommentCreateRequest`):**
+  - `text`: строка от 5 до 2000 символов.
+  - Правило валидации: очистка концевых пробелов (`strip()`). Строка из одних пробелов либо значащий текст короче 5 символов отклоняется ошибкой `400 Bad Request`.
+- **Просмотр комментария (`CommentResponse`):**
+  - `id`: идентификатор комментария (`integer`).
+  - `submission_id`: ссылка на сдачу (`integer`).
+  - `author_id`: идентификатор автора (`integer`).
+  - `author_name`: ФИО автора (`string`).
+  - `author_role`: роль автора (`student` или `teacher`).
+  - `text`: текст замечания (`string`).
+  - `created_at`: дата и время создания (`datetime UTC`).
 
+### 3.5. Модель унифицированной ошибки (`ErrorResponse`)
+Возвращается при всех ошибках бизнес-логики и валидации:
 
-class PresignedDownloadResponse(BaseModel):
-    download_url: str = Field(..., description="Временный pre-signed GET URL из MinIO")
-    file_name: str = Field(..., description="Имя скачиваемого файла для заголовка Content-Disposition")
-    file_size_bytes: int = Field(..., description="Размер файла в байтах")
-    file_sha256: str = Field(..., description="Контрольная сумма SHA-256")
-    expires_in_seconds: int = Field(900, description="Время жизни ссылки в секундах (15 минут)")
-
-
-class SubmissionUploadResponse(BaseModel):
-    submission: "SubmissionResponse"  # ссылка на схему карточки сдачи
-    report: ReportResponse
-    message: str = "Отчёт успешно загружен и передан на проверку"
-
-
-class CommentCreateRequest(BaseModel):
-    text: str = Field(..., min_length=5, max_length=2000, description="Текст замечания или комментария")
-
-    @field_validator("text")
-    @classmethod
-    def validate_whitespace(cls, v: str) -> str:
-        stripped = v.strip()
-        if len(stripped) < 5:
-            raise ValueError("Комментарий должен содержать не менее 5 значащих символов")
-        return stripped
-
-
-class CommentResponse(BaseModel):
-    id: int
-    submission_id: int
-    author_id: int
-    author_name: str
-    author_role: str
-    text: str
-    created_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class ErrorDetail(BaseModel):
-    field: Optional[str] = None
-    issue: str
-
-
-class ErrorResponse(BaseModel):
-    code: str = Field(..., description="Машиночитаемый код ошибки")
-    message: str = Field(..., description="Понятное описание ошибки на русском языке")
-    details: Optional[List[ErrorDetail]] = None
-```
+| Поле | Тип | Обязательность | Описание |
+|---|---|:---:|---|
+| `code` | `string` | Да | Машиночитаемый код ошибки (`INVALID_FILE_TYPE`, `FILE_TOO_LARGE`, `EMPTY_FILE`, `INVALID_SUBMISSION_STATE`, `FILE_NOT_UPLOADED`, `STORAGE_ERROR`, `DB_ERROR`) |
+| `message` | `string` | Да | Понятное описание ошибки на русском языке для отображения пользователю |
+| `details` | `array` | Нет | Детализация нарушений: массив объектов `{ field: string, issue: string }` |
 
 ---
 
-## 4. Контракт клиентского слоя (TypeScript для Frontend)
+## 4. Требования к интеграции клиентского слоя (Frontend для задачи 4.4.5)
 
-Для файла `frontend/src/api/submissionsApi.ts`:
+Настоящий раздел определяет требования к методам и форматам запросов, которые фронтенд-разработчик реализует в рамках задачи **4.4.5** (`frontend/src/api/submissionsApi.ts`):
 
-```typescript
-export interface ReportResponse {
-  id: number;
-  submission_id: number;
-  version_number: number;
-  file_name: string;
-  file_size_bytes: number;
-  file_mime_type: string;
-  file_sha256: string;
-  uploaded_at: string;
-}
+### 4.1. Спецификация API-методов клиента
 
-export interface PresignedDownloadResponse {
-  download_url: string;
-  file_name: string;
-  file_size_bytes: number;
-  file_sha256: string;
-  expires_in_seconds: number;
-}
+| Метод клиента | Эндпоинт и HTTP-метод | Формат запроса | Ожидаемый ответ | Ответственность фронтенда |
+|---|---|---|---|---|
+| `uploadReport(submissionId, file)` | `POST /api/v1/submissions/{id}/upload` | `multipart/form-data`, поле `file` | `SubmissionUploadResponse` | - Клиентская валидация расширения (`.pdf`, `.docx`, `.zip`) и размера (`≤ 20 МБ`) до отправки трафика<br>- Индикация прогресса (прогресс-бар / спиннер)<br>- Блокировка кнопки повторной отправки во время запроса |
+| `getDownloadUrl(submissionId, versionId?)` | `GET /api/v1/submissions/{id}/download-url` | Query: `?version_id=...` (опционально) | `PresignedDownloadResponse` | - Получение временного URL<br>- Инициация автоматического скачивания файла браузером по ссылке `download_url` |
+| `getReportsHistory(submissionId)` | `GET /api/v1/submissions/{id}/reports` | Без тела | `{ total: number, items: ReportResponse[] }` | - Отображение списка всех загруженных версий отчётов студента в карточке сдачи (US-09) |
+| `getComments(submissionId)` | `GET /api/v1/submissions/{id}/comments` | Без тела | `CommentResponse[]` | - Отображение диалога замечаний преподавателя |
+| `addComment(submissionId, text)` | `POST /api/v1/submissions/{id}/comments` | `application/json`: `{ text }` | `CommentResponse` | - Доступно только в интерфейсе преподавателя<br>- Блокировка отправки пустого текста (< 5 символов) |
 
-export interface SubmissionUploadResponse {
-  submission: any;
-  report: ReportResponse;
-  message: string;
-}
-
-export interface CommentResponse {
-  id: number;
-  submission_id: number;
-  author_id: number;
-  author_name: string;
-  author_role: 'student' | 'teacher';
-  text: string;
-  created_at: string;
-}
-
-export const submissionsApi = {
-  // Загрузка файла через multipart/form-data
-  uploadReport: async (submissionId: number, file: File): Promise<SubmissionUploadResponse> => {
-    const formData = new FormData();
-    formData.append('file', file);
-
-    const token = localStorage.getItem('access_token');
-    const response = await fetch(`/api/v1/submissions/${submissionId}/upload`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      body: formData,
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw errorData;
-    }
-    return response.json();
-  },
-
-  // Получение Pre-signed URL на скачивание
-  getDownloadUrl: async (submissionId: number, versionId?: number): Promise<PresignedDownloadResponse> => {
-    const query = versionId ? `?version_id=${versionId}` : '';
-    return request<PresignedDownloadResponse>(`/submissions/${submissionId}/download-url${query}`);
-  },
-
-  // Получение истории версий
-  getReportsHistory: async (submissionId: number): Promise<{ total: number; items: ReportResponse[] }> => {
-    return request(`/submissions/${submissionId}/reports`);
-  },
-
-  // Получение комментариев
-  getComments: async (submissionId: number): Promise<CommentResponse[]> => {
-    return request(`/submissions/${submissionId}/comments`);
-  },
-
-  // Добавление комментария преподавателем
-  addComment: async (submissionId: number, text: string): Promise<CommentResponse> => {
-    return request(`/submissions/${submissionId}/comments`, {
-      method: 'POST',
-      body: JSON.stringify({ text }),
-    });
-  },
-};
-```
+> **Важно для разработчика интерфейса (`4.4.4`, `4.4.5`):** все ошибки от бэкенда приходят в унифицированном формате `ErrorResponse`. Обработка должна строиться по полю `code` (например, при коде `INVALID_SUBMISSION_STATE` блокировать форму, при `FILE_TOO_LARGE` подсвечивать ограничение 20 МБ).
 
 ---
 
