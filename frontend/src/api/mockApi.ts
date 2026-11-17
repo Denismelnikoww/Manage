@@ -12,19 +12,6 @@ const mockWorks: Work[] = [
 const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 
 export const mockApi = {
-    login: async (email: string, password: string) => {
-        await delay(400);
-        if (password.length < 4) throw new Error('Пароль слишком короткий');
-        localStorage.setItem('token', 'mock-token');
-        localStorage.setItem('user', JSON.stringify(mockUser));
-        return mockUser;
-    },
-    register: async (name: string, email: string, password: string) => {
-        await delay(400);
-        localStorage.setItem('token', 'mock-token');
-        localStorage.setItem('user', JSON.stringify({ ...mockUser, name, email }));
-        return mockUser;
-    },
     getWorks: async () => {
         await delay(400);
         return mockWorks;
