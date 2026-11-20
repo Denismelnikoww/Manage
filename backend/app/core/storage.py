@@ -27,22 +27,34 @@ ALLOWED_MIME_TYPES = {
     ".zip": "application/zip",
 }
 
-# Разрешённые символы в ключе объекта: буквы, цифры, точка, дефис, подчёркивание
-_UNSAFE_FILENAME_RE = re.compile(r"[^\w.\-]+", flags=re.UNICODE)
+# Разрешённые символы в ключе объекта: только ASCII-буквы, цифры, точка, дефис, подчёркивание
+# (оригинальное имя сохраняется в БД в reports.file_name)
+_UNSAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9._-]+")
+_EXT_RE = re.compile(r"[^A-Za-z0-9]+")
 
 
 def sanitize_filename(filename: str) -> str:
     """Очищает имя файла для использования в ключе MinIO.
 
-    Убирает разделители путей, '..', управляющие символы и опасные символы.
-    Кириллица сохраняется. Длина ограничена 120 символами.
+    Оставляет только ASCII-символы (буквы, цифры, '.', '_', '-'), защищает
+    от path traversal. Кириллица и спецсимволы заменяются, расширение
+    сохраняется. Оригинальное имя хранится в БД (reports.file_name).
     """
     name = (filename or "").replace("\\", "/").split("/")[-1]
     name = name.replace("\x00", "")
-    name = _UNSAFE_FILENAME_RE.sub("_", name).strip("._-")
-    if not name:
-        name = "report"
-    return name[:120]
+
+    stem, extension = name, ""
+    if "." in name:
+        stem, raw_ext = name.rsplit(".", 1)
+        cleaned_ext = _EXT_RE.sub("", raw_ext.lower())[:10]
+        if cleaned_ext:
+            extension = "." + cleaned_ext
+
+    stem = _UNSAFE_FILENAME_RE.sub("_", stem).strip("._-")
+    if not stem:
+        stem = "report"
+
+    return (stem[:110] + extension)[:120]
 
 
 def get_extension(filename: str) -> str:
@@ -94,6 +106,7 @@ class MinioStorageService:
             access_key=access_key or settings.MINIO_ROOT_USER,
             secret_key=secret_key or settings.MINIO_ROOT_PASSWORD,
             secure=self._secure,
+            region="us-east-1",
         )
 
         public_host, public_secure = _parse_endpoint(
@@ -104,6 +117,7 @@ class MinioStorageService:
             access_key=access_key or settings.MINIO_ROOT_USER,
             secret_key=secret_key or settings.MINIO_ROOT_PASSWORD,
             secure=public_secure,
+            region="us-east-1",
         )
 
     # --- инфраструктура ---

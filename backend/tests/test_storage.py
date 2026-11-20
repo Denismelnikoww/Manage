@@ -32,6 +32,8 @@ def test_sanitize_filename_replaces_unsafe_symbols():
     assert " " not in cleaned
     assert "(" not in cleaned and ")" not in cleaned
     assert "№" not in cleaned
+    # Ключ объекта должен быть ASCII-safe (TC-FILE-010)
+    assert cleaned.isascii()
 
 
 def test_sanitize_filename_fallback_and_limit():
