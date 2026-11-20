@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.core.database import Base, engine
+from app.core.errors import ApiError, api_error_handler
 from app.core.seed import seed_roles_on_startup
 from app.core.storage import get_storage
 from app.api.v1.api import api_router
@@ -63,6 +64,9 @@ app.add_middleware(
 
 # Mount API routers
 app.include_router(api_router, prefix=settings.API_V1_STR)
+
+# Единый формат ошибок модуля отчётов (code/message/details)
+app.add_exception_handler(ApiError, api_error_handler)
 
 
 @app.get("/", tags=["Health"])
