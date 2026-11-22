@@ -16,6 +16,7 @@ from app.models import (  # noqa: F401  (нужны для Base.metadata)
     Report,
     Role,
     StudentSubmission,
+    SubmissionStatusHistory,
     User,
 )
 

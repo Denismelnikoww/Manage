@@ -1,4 +1,4 @@
-"""Эндпоинты отчётов и комментариев (WBS 4.4.3)."""
+"""Эндпоинты сдач: статусы (4.3.2), отчёты и комментарии (4.4.3)."""
 
 from typing import Optional
 
@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import CurrentUser
 from app.core.database import get_db
-from app.core.errors import ApiError
 from app.schemas.report import (
     CommentCreateRequest,
     CommentResponse,
@@ -16,9 +15,57 @@ from app.schemas.report import (
     ReportResponse,
     SubmissionUploadResponse,
 )
+from app.schemas.status import (
+    StatusHistoryListResponse,
+    StatusHistoryItem,
+    SubmissionStatusResponse,
+    SubmissionStatusUpdateRequest,
+)
 from app.services import reports as service
+from app.services import statuses as status_service
 
 router = APIRouter()
+
+
+@router.patch(
+    "/{submission_id}/status",
+    response_model=SubmissionStatusResponse,
+    summary="Смена статуса сдачи (WBS 4.3.2 / FR-03)",
+)
+def update_submission_status(
+    submission_id: int,
+    payload: SubmissionStatusUpdateRequest,
+    current_user: CurrentUser,
+    db: Session = Depends(get_db),
+) -> SubmissionStatusResponse:
+    """FSM-переходы с проверкой прав по матрице 4.3.1."""
+    submission = status_service.get_submission_or_404(db, submission_id)
+    updated = status_service.change_submission_status(
+        db,
+        current_user,
+        submission,
+        target_status=payload.status,
+        comment_text=payload.comment_text,
+    )
+    return SubmissionStatusResponse(**status_service.submission_to_status_response(updated))
+
+
+@router.get(
+    "/{submission_id}/status-history",
+    response_model=StatusHistoryListResponse,
+    summary="История смены статусов сдачи (FR-10 Could)",
+)
+def get_status_history(
+    submission_id: int,
+    current_user: CurrentUser,
+    db: Session = Depends(get_db),
+) -> StatusHistoryListResponse:
+    submission = status_service.get_submission_or_404(db, submission_id)
+    items = status_service.list_status_history(db, current_user, submission)
+    return StatusHistoryListResponse(
+        total=len(items),
+        items=[StatusHistoryItem(**status_service.history_to_response(item)) for item in items],
+    )
 
 
 @router.post(
