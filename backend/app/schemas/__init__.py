@@ -16,6 +16,12 @@ from app.schemas.report import (
     SubmissionUploadInfo,
     SubmissionUploadResponse,
 )
+from app.schemas.status import (
+    StatusHistoryItem,
+    StatusHistoryListResponse,
+    SubmissionStatusResponse,
+    SubmissionStatusUpdateRequest,
+)
 
 __all__ = [
     "LabWorkBase",
@@ -36,4 +42,8 @@ __all__ = [
     "ReportResponse",
     "SubmissionUploadInfo",
     "SubmissionUploadResponse",
+    "StatusHistoryItem",
+    "StatusHistoryListResponse",
+    "SubmissionStatusResponse",
+    "SubmissionStatusUpdateRequest",
 ]

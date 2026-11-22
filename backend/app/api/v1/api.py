@@ -7,5 +7,5 @@ api_router.include_router(works.router, prefix="/works", tags=["Works & Deadline
 api_router.include_router(
     submissions.router,
     prefix="/submissions",
-    tags=["Submissions / Reports (4.4.3)"],
+    tags=["Submissions / Status & Reports (4.3.2, 4.4.3)"],
 )

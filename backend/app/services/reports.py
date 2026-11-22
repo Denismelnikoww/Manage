@@ -131,8 +131,20 @@ def upload_report(
         file_mime_type=mime_type,
         file_sha256=sha256,
     )
+    previous_status = submission.status
     submission.status = "submitted"
     submission.submitted_at = datetime.now(timezone.utc)
+
+    # История статусов (WBS 4.3.2): upload тоже пишет переход → submitted
+    from app.services.statuses import append_status_history
+
+    append_status_history(
+        db,
+        submission,
+        from_status=previous_status,
+        to_status="submitted",
+        user=user,
+    )
 
     try:
         db.add(report)
