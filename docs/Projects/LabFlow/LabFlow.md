@@ -9,7 +9,7 @@ customFields: []
 teamMembers: []
 savedViews: []
 createdAt: "2026-10-27T18:31:53.969Z"
-updatedAt: "2026-11-06T14:28:29.887Z"
+updatedAt: "2026-11-23T17:40:22.794Z"
 ---
 
 # lucide-app-window LabFlow
