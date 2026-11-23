@@ -96,14 +96,22 @@
   "projectFilters": {
     "project:docs/Projects/LabFlow/LabFlow.md": {
       "filter": {
-        "conditions": [],
+        "conditions": [
+          {
+            "field": "assignee",
+            "op": "any",
+            "value": [
+              "[[Пашковский Виктор]]"
+            ]
+          }
+        ],
         "showArchived": false
       },
       "activeSavedViewId": null,
       "sort": [
         {
-          "key": "status",
-          "dir": "asc"
+          "key": "assignees",
+          "dir": "desc"
         }
       ],
       "group": {
