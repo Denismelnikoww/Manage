@@ -2,6 +2,7 @@
 
 from datetime import datetime, timedelta, timezone
 
+import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -25,6 +26,8 @@ from app.models import (
     TelegramAuthToken,
     User,
 )
+
+pytestmark = pytest.mark.unit
 
 TEST_DATABASE_URL = "sqlite:///:memory:"
 engine = create_engine(

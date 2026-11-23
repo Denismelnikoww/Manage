@@ -1,5 +1,7 @@
 """Тесты вспомогательных функций хранилища (WBS 4.4.2)."""
 
+import pytest
+
 from app.core.storage import (
     ALLOWED_EXTENSIONS,
     build_object_key,
@@ -7,6 +9,8 @@ from app.core.storage import (
     sanitize_filename,
     _parse_endpoint,
 )
+
+pytestmark = pytest.mark.unit
 
 
 def test_allowed_extensions_contract():
