@@ -43,6 +43,16 @@ class Settings(BaseSettings):
     REPORT_MAX_SIZE_BYTES: int = 20 * 1024 * 1024  # 20 971 520
     PRESIGNED_URL_TTL_SECONDS: int = 900
 
+    # Telegram / aiogram3 (WBS 4.5.2)
+    TELEGRAM_BOT_TOKEN: str = ""
+    TELEGRAM_BOT_USERNAME: str = "LabFlowBot"
+    # Межсервисный секрет для X-Service-Token (бот → backend bind API, 4.5.3)
+    TELEGRAM_SERVICE_TOKEN: str = "labflow-telegram-service-token-change-me"
+    # URL бэкенда глазами контейнера бота (docker: http://backend:8000)
+    BACKEND_INTERNAL_URL: str = "http://localhost:8000"
+    # TTL токена deep-link привязки (минуты), ERD / US-10
+    TELEGRAM_LINK_TOKEN_TTL_MINUTES: int = 10
+
     model_config = SettingsConfigDict(
         case_sensitive=True,
         env_file=".env",
