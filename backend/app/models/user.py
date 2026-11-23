@@ -41,7 +41,11 @@ class User(Base):
 
     full_name = Column(String(255), nullable=True)
     group_name = Column(String(50), nullable=True, index=True)
+    # telegram_id ≈ telegram_chat_id из ERD (унификация имён — WBS 4.6.1)
     telegram_id = Column(BigInteger, unique=True, nullable=True)
+    telegram_username = Column(String(100), nullable=True)
+    # Спецификация TG §4.2 / WBS 4.5.2: общий переключатель рассылки
+    notifications_enabled = Column(Boolean, default=True, nullable=False)
 
     is_active = Column(Boolean, default=True, nullable=False)
     role_id = Column(Integer, ForeignKey("roles.id"), nullable=False)
