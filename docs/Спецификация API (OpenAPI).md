@@ -169,19 +169,52 @@
 
 #### `POST /submissions/{id}/upload` — Загрузка файла отчета
 - **Формат запроса:** `multipart/form-data`, поле `file`.
-- **Ограничения:** Допустимые форматы: `.pdf`, `.docx`, `.zip`. Максимальный размер: **20 МБ** (20 971 520 байт).
-- **Результат:** Файл загружается в приватный бакет MinIO (`MINIO_BUCKET_REPORTS`, по умолчанию `labflow-reports`) по ключу `submissions/{lab_id}/{student_id}/{timestamp}_{short_uuid}_{filename}`, статус переводится в `submitted`, преподавателю направляется нотификация `NEW_SUBMISSION` в Telegram. Подробности валидации и версий — в [[Требования к загрузке и скачиванию файлов (MinIO)]].
+- **Ограничения:** Допустимые форматы: `.pdf`, `.docx`, `.zip`. Максимальный размер: **20 МБ** (20 971 520 байт). Проверка по magic bytes на сервере.
+- **Результат:** Файл загружается в приватный бакет MinIO (`MINIO_BUCKET_REPORTS`, по умолчанию `labflow-reports`) по ключу `submissions/{lab_id}/{student_id}/{timestamp}_{short_uuid}_{filename}`, статус переводится в `submitted`, преподавателю направляется нотификация `NEW_SUBMISSION` в Telegram. Создаётся запись версии отчёта в таблице `reports`. Подробности валидации, версий и компенсирующего удаления — в [[Спецификация контрактов API загрузки файлов через MinIO (4.4.8)]] и [[Требования к загрузке и скачиванию файлов (MinIO)]].
 
 #### `GET /submissions/{id}/download-url` — Скачивание отчета
+- **Параметры:** `submission_id` (путь), `version_id` (query, опционально — для скачивания исторической версии).
 - **Ответ (`200 OK` ➔ `PresignedDownloadResponse`):**
   ```json
   {
-    "download_url": "https://minio.local/labflow-reports/submissions/lab1/student1/timestamp_report.pdf?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=...&X-Amz-Signature=...",
+    "download_url": "http://localhost:9000/labflow-reports/submissions/1/42/20261117T143000Z_a1b2c3d4_LR1_Ivanov.pdf?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=...&X-Amz-Signature=...",
     "file_name": "LR1_Ivanov_VPR42.pdf",
+    "file_size_bytes": 2457600,
+    "file_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "expires_in_seconds": 900
   }
   ```
-- **Безопасность:** Временная ссылка (Pre-signed URL) активна ровно 15 минут. Студент может запрашивать ссылку только для своего файла.
+- **Безопасность:** Временная ссылка (Pre-signed URL) активна ровно 15 минут (900 секунд). Студент может запрашивать ссылку только для своего файла. Заголовок `Content-Disposition: attachment` принудительно открывает диалог скачивания.
+
+#### `GET /submissions/{id}/reports` — История версий отчетов (WBS 4.4.8 / US-09)
+- **Ответ (`200 OK` ➔ `ReportVersionListResponse`):**
+  ```json
+  {
+    "total": 2,
+    "items": [
+      {
+        "id": 12,
+        "submission_id": 15,
+        "version_number": 2,
+        "file_name": "LR1_Ivanov_v2_fixed.pdf",
+        "file_size_bytes": 2510000,
+        "file_mime_type": "application/pdf",
+        "file_sha256": "7a35...c12",
+        "uploaded_at": "2026-11-17T18:10:00Z"
+      },
+      {
+        "id": 8,
+        "submission_id": 15,
+        "version_number": 1,
+        "file_name": "LR1_Ivanov_VPR42.pdf",
+        "file_size_bytes": 2457600,
+        "file_mime_type": "application/pdf",
+        "file_sha256": "e3b0...b55",
+        "uploaded_at": "2026-11-17T14:30:00Z"
+      }
+    ]
+  }
+  ```
 
 ---
 
@@ -256,7 +289,9 @@
 - Полный YAML-файл спецификации: [openapi.yaml](openapi.yaml)
 - Реляционная модель данных: [[Схема базы данных (ERD)|Схема базы данных (ERD)]]
 - Матрица прав доступа: [[Матрица ролей и прав доступа|Матрица ролей и прав доступа]]
-- Требования к файлам (MinIO): [[Требования к загрузке и скачиванию файлов (MinIO)]]
+- Требования к файлам (MinIO, WBS 4.4.1): [[Требования к загрузке и скачиванию файлов (MinIO)]]
+- Спецификация контрактов API загрузки файлов через MinIO (WBS 4.4.8): [[Спецификация контрактов API загрузки файлов через MinIO (4.4.8)]]
+- Критерии приёмки и тест-кейсы загрузки файлов (WBS 4.4.6): [[Тест-кейсы загрузки файлов, прав доступа и комментариев (4.4.6)]]
 - Спецификация Telegram-уведомлений: [[Спецификация Telegram-уведомлений (Триггеры и шаблоны)]]
 - Матрица трассировки требований: [[Матрица трассировки требований (RTM)]]
 - Пользовательские сценарии: [[Use Cases|Use Cases]] и [[User Stories|User Stories]]

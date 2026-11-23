@@ -1,25 +1,21 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { Work, WorkStatus } from '../types';
-import { mockApi } from '../api/mockApi';
+import { worksApi } from '../api/worksApi';
+import type { WorkResponse } from '../api/worksApi';
+import { submissionsApi, STATUS_LABELS } from '../api/submissionsApi';
+import type { SubmissionStatus } from '../api/submissionsApi';
 import './Works.scss';
-
-const STATUS_LABELS: Record<WorkStatus, string> = {
-    TODO: 'Нужно сделать',
-    IN_PROGRESS: 'В работе',
-    REVIEW: 'На проверке',
-    DONE: 'Готово'
-};
 
 export function WorksPage() {
     const navigate = useNavigate();
-    const [works, setWorks] = useState<Work[]>([]);
+    const [works, setWorks] = useState<WorkResponse[]>([]);
     const [loading, setLoading] = useState(true);
-    const [filter, setFilter] = useState<WorkStatus | 'ALL'>('ALL');
+    const [error, setError] = useState('');
 
-    const [title, setTitle] = useState('');
-    const [description, setDescription] = useState('');
-    const [deadline, setDeadline] = useState('');
+    // Получаем инфу о юзере
+    const userStr = localStorage.getItem('user');
+    const user = userStr ? JSON.parse(userStr) : null;
+    const isTeacher = user?.role?.code === 'teacher';
 
     useEffect(() => {
         const token = localStorage.getItem('token');
@@ -30,21 +26,25 @@ export function WorksPage() {
         loadWorks();
     }, [navigate]);
 
-    const loadWorks = () => {
-        mockApi.getWorks().then(data => {
-            setWorks(data);
+    const loadWorks = async () => {
+        try {
+            const data = await worksApi.getWorks();
+            setWorks(data.items);
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
             setLoading(false);
-        });
+        }
     };
 
-    const handleCreate = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!title || !deadline) return;
-        await mockApi.createWork(title, description, deadline);
-        setTitle('');
-        setDescription('');
-        setDeadline('');
-        loadWorks();
+    const handleStatusChange = async (submissionId: number, newStatus: SubmissionStatus, comment?: string) => {
+        try {
+            await submissionsApi.updateStatus(submissionId, newStatus, comment);
+            // Перезапрашиваем список, чтобы увидеть обновленный статус
+            loadWorks();
+        } catch (err: any) {
+            alert(`Ошибка: ${err.message}`);
+        }
     };
 
     const handleLogout = () => {
@@ -53,74 +53,82 @@ export function WorksPage() {
     };
 
     if (loading) return <div className="loading">Загрузка...</div>;
-
-    const filteredWorks = filter === 'ALL' ? works : works.filter(w => w.status === filter);
+    if (error) return <div className="error-message" style={{ margin: 40, textAlign: 'center' }}>Ошибка: {error}</div>;
 
     return (
         <div className="works-container">
             <div className="works-header">
-                <h2>Мои задачи</h2>
+                <div>
+                    <h2>Лабораторные работы</h2>
+                    <span className="user-role">
+                        {user?.full_name || user?.email} ({isTeacher ? 'Преподаватель' : 'Студент'})
+                    </span>
+                </div>
                 <button onClick={handleLogout} className="secondary">Выйти</button>
             </div>
 
-            <div className="create-work-panel">
-                <h3>Создать задачу</h3>
-                <form onSubmit={handleCreate}>
-                    <input
-                        type="text"
-                        placeholder="Название"
-                        value={title}
-                        onChange={e => setTitle(e.target.value)}
-                        required
-                    />
-                    <input
-                        type="text"
-                        placeholder="Описание"
-                        value={description}
-                        onChange={e => setDescription(e.target.value)}
-                    />
-                    <input
-                        type="date"
-                        value={deadline}
-                        onChange={e => setDeadline(e.target.value)}
-                        required
-                    />
-                    <button type="submit">Добавить</button>
-                </form>
-            </div>
-
-            <div className="filters-panel">
-                <button
-                    className={filter === 'ALL' ? 'active' : ''}
-                    onClick={() => setFilter('ALL')}
-                >
-                    Все
-                </button>
-                {Object.entries(STATUS_LABELS).map(([key, label]) => (
-                    <button
-                        key={key}
-                        className={filter === key ? 'active' : ''}
-                        onClick={() => setFilter(key as WorkStatus)}
-                    >
-                        {label}
-                    </button>
-                ))}
-            </div>
-
             <div className="works-grid">
-                {filteredWorks.length === 0 ? (
-                    <p>Задач нет</p>
+                {works.length === 0 ? (
+                    <p>Работ нет</p>
                 ) : (
-                    filteredWorks.map(w => (
-                        <div key={w.id} className="work-card">
-                            <h3>{w.title}</h3>
-                            <p>{w.description || 'Без описания'}</p>
-                            <div className="work-footer">
-                                <strong>До: {w.deadline}</strong>
-                                <span className="status-badge">{STATUS_LABELS[w.status]}</span>
+                    works.map(w => {
+                        const sub = w.student_submission;
+
+                        return (
+                            <div key={w.id} className="work-card">
+                                <div className="work-card-header">
+                                    <h3>ЛР №{w.order_num}: {w.title}</h3>
+                                    {w.is_overdue && <span className="badge-overdue">Просрочено</span>}
+                                </div>
+                                <p>{w.description}</p>
+
+                                <div className="work-footer">
+                                    <strong>До: {new Date(w.deadline).toLocaleDateString('ru-RU')}</strong>
+                                    {sub ? (
+                                        <span className="status-badge">{STATUS_LABELS[sub.status]}</span>
+                                    ) : (
+                                        <span className="status-badge teacher-view">Ведомость</span>
+                                    )}
+                                </div>
+
+                                {/* --- Кнопки для Студента --- */}
+                                {!isTeacher && sub && sub.status === 'not_started' && (
+                                    <button
+                                        className="btn-action student"
+                                        onClick={() => handleStatusChange(sub.id, 'in_progress')}
+                                    >
+                                        Взять в работу
+                                    </button>
+                                )}
+
+                                {/* --- Кнопки для Преподавателя --- */}
+                                {/* Внимание: пока бэк не отдает список сдач для препода, эта кнопка появится только если он зайдет под студентом (для теста) */}
+                                {isTeacher && sub && sub.status === 'submitted' && (
+                                    <div className="teacher-actions">
+                                        <button
+                                            className="btn-action accept"
+                                            onClick={() => handleStatusChange(sub.id, 'accepted')}
+                                        >
+                                            Принять
+                                        </button>
+                                        <button
+                                            className="btn-action rework"
+                                            onClick={() => {
+                                                const comment = prompt('Введите комментарий (обязательно):');
+                                                if (comment && comment.trim().length >= 5) {
+                                                    handleStatusChange(sub.id, 'needs_work', comment);
+                                                } else {
+                                                    alert('Комментарий должен быть от 5 символов');
+                                                }
+                                            }}
+                                        >
+                                            На доработку
+                                        </button>
+                                    </div>
+                                )}
                             </div>
-                        </div>
-                    ))
+                        );
+                    })
                 )}
             </div>
         </div>

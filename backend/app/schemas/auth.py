@@ -33,6 +33,8 @@ class UserResponse(BaseModel):
     full_name: str | None = None
     group_name: str | None = None
     telegram_id: int | None = None
+    telegram_username: str | None = None
+    notifications_enabled: bool = True
     is_active: bool
     role: RoleResponse
     created_at: datetime

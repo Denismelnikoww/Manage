@@ -498,11 +498,22 @@ paths:
               schema:
                 $ref: '#/components/schemas/SubmissionResponse'
         '400':
-          description: Недопустимый формат файла или превышен размер 20 МБ
+          description: Недопустимый формат файла, пустой файл или несовпадение magic bytes
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalid_file_type:
+                  summary: Недопустимый формат файла
+                  value:
+                    code: INVALID_FILE_TYPE
+                    message: Допустимы только корректные файлы форматов PDF, DOCX, ZIP
+                empty_file:
+                  summary: Пустой файл
+                  value:
+                    code: EMPTY_FILE
+                    message: Файл отчёта не выбран или является пустым
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
@@ -513,6 +524,27 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: INVALID_SUBMISSION_STATE
+                message: "Повторная загрузка недоступна: работа уже сдана или принята"
+        '413':
+          description: Превышен максимально допустимый размер файла 20 МБ (20 971 520 байт)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: FILE_TOO_LARGE
+                message: Размер файла превышает максимально допустимый лимит 20 МБ (20 971 520 байт)
+        '500':
+          description: Сбой сохранения файла в MinIO или ошибка записи в БД
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: STORAGE_ERROR
+                message: Сбой сохранения файла в объектном хранилище MinIO
 
   /submissions/{submission_id}/download-url:
     get:
@@ -520,7 +552,7 @@ paths:
         - Submissions
       summary: Получение временного pre-signed URL на скачивание файла
       description: |
-        Генерирует временный защищенный URL из MinIO со сроком действия 15 минут.
+        Генерирует временный защищенный URL из MinIO со сроком действия 15 минут (900 секунд).
         - **Студент:** может скачивать только свой сданный отчет.
         - **Преподаватель:** может скачивать отчет любого студента.
       operationId: getSubmissionDownloadUrl
@@ -532,7 +564,14 @@ paths:
           required: true
           schema:
             type: string
-            format: uuid
+            description: Идентификатор сдачи (integer или uuid)
+        - name: version_id
+          in: query
+          required: false
+          description: Идентификатор конкретной исторической версии отчета (если опущен — актуальная версия)
+          schema:
+            type: integer
+            example: 8
       responses:
         '200':
           description: Pre-signed URL сформирован
@@ -546,6 +585,42 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: FILE_NOT_UPLOADED
+                message: Для данной сдачи файл отчёта ещё не был загружен
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /submissions/{submission_id}/reports:
+    get:
+      tags:
+        - Submissions
+      summary: Получение истории версий отчетов по сдаче (WBS 4.4.8 / US-09)
+      description: |
+        Возвращает историю всех загруженных версий файлов по указанной сдаче.
+        - **Студент:** доступно только для своей работы.
+        - **Преподаватель:** доступно для любого студента группы.
+      operationId: getSubmissionReports
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: submission_id
+          in: path
+          required: true
+          schema:
+            type: string
+            description: Идентификатор сдачи
+      responses:
+        '200':
+          description: Список версий отчётов успешно получен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportVersionListResponse'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
@@ -1024,17 +1099,92 @@ components:
         - download_url
         - file_name
         - expires_in_seconds
+        - file_size_bytes
+        - file_sha256
       properties:
         download_url:
           type: string
           format: uri
-          example: https://minio.local/submissions/lab1/student1/timestamp_report.pdf?X-Amz-Signature=...
+          example: http://localhost:9000/labflow-reports/submissions/1/42/20261117T143000Z_a1b2c3d4_LR1_Ivanov.pdf?X-Amz-Signature=...
         file_name:
           type: string
           example: LR1_Ivanov_VPR42.pdf
         expires_in_seconds:
           type: integer
           example: 900
+        file_size_bytes:
+          type: integer
+          example: 2457600
+        file_sha256:
+          type: string
+          example: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+
+    ReportResponse:
+      type: object
+      required:
+        - id
+        - submission_id
+        - version_number
+        - file_name
+        - file_size_bytes
+        - file_mime_type
+        - file_sha256
+        - uploaded_at
+      properties:
+        id:
+          type: integer
+          example: 8
+        submission_id:
+          type: integer
+          example: 15
+        version_number:
+          type: integer
+          example: 1
+        file_name:
+          type: string
+          example: LR1_Ivanov_VPR42.pdf
+        file_size_bytes:
+          type: integer
+          example: 2457600
+        file_mime_type:
+          type: string
+          example: application/pdf
+        file_sha256:
+          type: string
+          example: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+        uploaded_at:
+          type: string
+          format: date-time
+          example: 2026-11-17T14:30:00Z
+
+    ReportVersionListResponse:
+      type: object
+      required:
+        - total
+        - items
+      properties:
+        total:
+          type: integer
+          example: 2
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReportResponse'
+
+    SubmissionUploadResponse:
+      type: object
+      required:
+        - submission
+        - report
+        - message
+      properties:
+        submission:
+          $ref: '#/components/schemas/SubmissionResponse'
+        report:
+          $ref: '#/components/schemas/ReportResponse'
+        message:
+          type: string
+          example: Отчёт успешно загружен и передан на проверку
 
     CommentCreateRequest:
       type: object

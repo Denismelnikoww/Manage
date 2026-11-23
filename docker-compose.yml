@@ -1,10 +1,17 @@
 # ==============================================================================
-# LabFlow — Docker Compose (WBS 2.1.2)
-# Поднимает изолированное локальное окружение: PostgreSQL + FastAPI + React.
+# LabFlow — Docker Compose (WBS 2.1.2 / 4.5.2)
+# Поднимает изолированное локальное окружение:
+#   PostgreSQL + MinIO + FastAPI + React + Telegram-бот (aiogram3).
 #   Frontend:  http://localhost:3000
 #   Backend:   http://localhost:8000  (Swagger: /docs)
 #   Postgres:  localhost:${POSTGRES_PORT:-5432}
+#   MinIO:     http://localhost:9000  (консоль: http://localhost:9001)
+#   telegram-bot: polling (нужен валидный TELEGRAM_BOT_TOKEN)
 #   docker compose up --build -d
+#
+# Примечание по образу MinIO: официальные образы minio/minio в текущем окружении
+# недоступны (registry отвечает 403), поэтому по умолчанию используется
+# bitnamilegacy/minio. Образ можно переопределить переменной MINIO_IMAGE в .env.
 # ==============================================================================
 
 services:
@@ -26,6 +33,22 @@ services:
       timeout: 5s
       retries: 5
 
+  minio:
+    image: ${MINIO_IMAGE:-bitnamilegacy/minio:latest}
+    container_name: labflow_minio
+    restart: always
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_DEFAULT_BUCKETS: ${MINIO_BUCKET_REPORTS:-labflow-reports}
+      MINIO_API_PORT_NUMBER: 9000
+      MINIO_CONSOLE_PORT_NUMBER: 9001
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio_data:/bitnami/minio/data
+
   backend:
     build:
       context: ./backend
@@ -34,12 +57,26 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      minio:
+        condition: service_started
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-labflow_user}:${POSTGRES_PASSWORD:-labflow_secret_password}@postgres:5432/${POSTGRES_DB:-labflow_db}
       SECRET_KEY: ${SECRET_KEY:-super_secret_jwt_key_labflow_2026_change_in_production}
       ALGORITHM: ${ALGORITHM:-HS256}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
       DEFAULT_GROUP_NAME: ${DEFAULT_GROUP_NAME:-ВПР42}
+      # MinIO: внутренний адрес для операций и внешний — для подписи pre-signed URL
+      MINIO_ENDPOINT: minio:9000
+      MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:-http://localhost:9000}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_BUCKET_REPORTS: ${MINIO_BUCKET_REPORTS:-labflow-reports}
+      MINIO_USE_SSL: "False"
+      REPORT_MAX_SIZE_BYTES: ${REPORT_MAX_SIZE_BYTES:-20971520}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-LabFlowBot}
+      TELEGRAM_SERVICE_TOKEN: ${TELEGRAM_SERVICE_TOKEN:-labflow-telegram-service-token-change-me}
+      TELEGRAM_LINK_TOKEN_TTL_MINUTES: ${TELEGRAM_LINK_TOKEN_TTL_MINUTES:-10}
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     healthcheck:
@@ -48,6 +85,22 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
+
+  telegram-bot:
+    build:
+      context: ./backend
+    container_name: labflow_telegram_bot
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-LabFlowBot}
+      TELEGRAM_SERVICE_TOKEN: ${TELEGRAM_SERVICE_TOKEN:-labflow-telegram-service-token-change-me}
+      BACKEND_INTERNAL_URL: http://backend:8000
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-labflow_user}:${POSTGRES_PASSWORD:-labflow_secret_password}@postgres:5432/${POSTGRES_DB:-labflow_db}
+    command: ["python", "-m", "app.bot.main"]
 
   frontend:
     build:
@@ -64,3 +117,4 @@ services:
 
 volumes:
   postgres_data:
+  minio_data:

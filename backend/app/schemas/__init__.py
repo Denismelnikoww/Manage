@@ -6,6 +6,22 @@ from app.schemas.lab_work import (
     LabWorkResponse,
     LabWorkListResponse,
 )
+from app.schemas.report import (
+    CommentCreateRequest,
+    CommentResponse,
+    ErrorResponse,
+    PresignedDownloadResponse,
+    ReportListResponse,
+    ReportResponse,
+    SubmissionUploadInfo,
+    SubmissionUploadResponse,
+)
+from app.schemas.status import (
+    StatusHistoryItem,
+    StatusHistoryListResponse,
+    SubmissionStatusResponse,
+    SubmissionStatusUpdateRequest,
+)
 
 __all__ = [
     "LabWorkBase",
@@ -18,4 +34,16 @@ __all__ = [
     "UserLogin",
     "UserRegister",
     "UserResponse",
+    "CommentCreateRequest",
+    "CommentResponse",
+    "ErrorResponse",
+    "PresignedDownloadResponse",
+    "ReportListResponse",
+    "ReportResponse",
+    "SubmissionUploadInfo",
+    "SubmissionUploadResponse",
+    "StatusHistoryItem",
+    "StatusHistoryListResponse",
+    "SubmissionStatusResponse",
+    "SubmissionStatusUpdateRequest",
 ]

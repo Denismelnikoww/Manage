@@ -1,53 +1,296 @@
+# WBS 2.2.2 — сценарии CI-S-01…CI-S-07 (+ selftest CI-S-08)
+# PR fast gate ≤ 7 мин; nightly — полный прогон + coverage.
+
 name: CI Pipeline
 
 on:
   push:
-    branches: [ "main", "develop" ]
+    branches: ["main", "develop"]
   pull_request:
-    branches: [ "main", "develop" ]
+    branches: ["main", "develop"]
+  schedule:
+    # 03:00 MSK = 00:00 UTC
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
 
 jobs:
-  lint-and-build:
-    name: Build and Code Quality Check
+  backend-static:
+    name: backend-static
     runs-on: ubuntu-latest
-
+    timeout-minutes: 3
+    defaults:
+      run:
+        working-directory: backend
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: compileall + import app
+        run: |
+          python -m compileall app
+          python -c "from app.main import app; print(app.title)"
+
+  backend-unit:
+    name: backend-unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
         with:
-          node-version: '20'
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
 
-      - name: Verify Backend (if present)
+      - name: Install dependencies
         run: |
-          if [ -d "backend" ]; then
-            echo "Verifying backend..."
-            python -m pip install --upgrade pip
-            if [ -f "backend/requirements.txt" ]; then
-              pip install -r backend/requirements.txt
-            fi
-            python -m compileall backend/
-          else
-            echo "Backend directory not found, skipping."
-          fi
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-      - name: Verify Frontend (if present)
+      - name: pytest unit (not integration)
         run: |
-          if [ -d "frontend" ]; then
-            echo "Verifying frontend..."
-            cd frontend
-            npm install
-            npm run build || echo "Warning: Frontend build completed with warnings"
-          else
-            echo "Frontend directory not found, skipping."
-          fi
+          mkdir -p reports
+          pytest -m "not integration" --junitxml=reports/junit-unit.xml
+          test -s reports/junit-unit.xml
 
-      - name: Pipeline Status
-        run: echo "CI Pipeline executed successfully."
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: junit-unit
+          path: backend/reports/junit-unit.xml
+
+  backend-integration:
+    name: backend-integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: labflow_user
+          POSTGRES_PASSWORD: labflow_secret_password
+          POSTGRES_DB: labflow_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U labflow_user -d labflow_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql+psycopg://labflow_user:labflow_secret_password@localhost:5432/labflow_test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: pytest integration (PostgreSQL 16)
+        run: |
+          mkdir -p reports
+          pytest -m integration --junitxml=reports/junit-integration.xml
+          test -s reports/junit-integration.xml
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: junit-integration
+          path: backend/reports/junit-integration.xml
+
+  backend-security:
+    name: backend-security
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: pytest security
+        run: |
+          mkdir -p reports
+          pytest -m security --junitxml=reports/junit-security.xml
+          test -s reports/junit-security.xml
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: junit-security
+          path: backend/reports/junit-security.xml
+
+  frontend-build:
+    name: frontend-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: npm ci + build
+        run: |
+          npm ci
+          npm run build
+
+  pipeline-selftest:
+    name: pipeline-selftest
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Workflow anti-masking checks (TC-CI-005)
+        run: |
+          set -euo pipefail
+          wf=".github/workflows/ci.yml"
+          # Только YAML-ключи шагов (не строки внутри этого же run-скрипта)
+          if grep -nE '^[[:space:]]+continue-on-error:[[:space:]]*true[[:space:]]*$' "$wf"; then
+            echo "Found YAML continue-on-error" >&2
+            exit 1
+          fi
+          if grep -nE '^[[:space:]]+pytest .*\|[[:space:]]*(true|echo)' "$wf"; then
+            echo "Found masked pytest invocation" >&2
+            exit 1
+          fi
+          if grep -nE '^[[:space:]]+npm run build[[:space:]]*\|\|' "$wf"; then
+            echo "Found masked frontend build" >&2
+            exit 1
+          fi
+          grep -q 'pytest' "$wf"
+          grep -q 'postgres:16-alpine' "$wf"
+          grep -q 'merge-gate' "$wf"
+          echo "pipeline-selftest OK"
+
+  merge-gate:
+    name: merge-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    needs:
+      - backend-static
+      - backend-unit
+      - backend-integration
+      - backend-security
+      - frontend-build
+      - pipeline-selftest
+    if: always()
+    steps:
+      - name: Aggregate required checks (TC-CI-024)
+        run: |
+          set -euo pipefail
+          echo "static=${{ needs.backend-static.result }}"
+          echo "unit=${{ needs.backend-unit.result }}"
+          echo "integration=${{ needs.backend-integration.result }}"
+          echo "security=${{ needs.backend-security.result }}"
+          echo "frontend=${{ needs.frontend-build.result }}"
+          echo "selftest=${{ needs.pipeline-selftest.result }}"
+          test "${{ needs.backend-static.result }}" = "success"
+          test "${{ needs.backend-unit.result }}" = "success"
+          test "${{ needs.backend-integration.result }}" = "success"
+          test "${{ needs.backend-security.result }}" = "success"
+          test "${{ needs.frontend-build.result }}" = "success"
+          test "${{ needs.pipeline-selftest.result }}" = "success"
+
+  backend-nightly:
+    name: backend-nightly
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: labflow_user
+          POSTGRES_PASSWORD: labflow_secret_password
+          POSTGRES_DB: labflow_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U labflow_user -d labflow_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql+psycopg://labflow_user:labflow_secret_password@localhost:5432/labflow_test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Full pytest + coverage (CI-S-05/06)
+        run: |
+          mkdir -p reports
+          pytest --cov=app --cov-report=xml:reports/coverage.xml --cov-report=term-missing --cov-fail-under=60 --junitxml=reports/junit-nightly.xml
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nightly-reports
+          path: |
+            backend/reports/junit-nightly.xml
+            backend/reports/coverage.xml
