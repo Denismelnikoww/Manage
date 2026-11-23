@@ -1,10 +1,12 @@
 # ==============================================================================
-# LabFlow — Docker Compose (WBS 2.1.2)
-# Поднимает изолированное локальное окружение: PostgreSQL + MinIO + FastAPI + React.
+# LabFlow — Docker Compose (WBS 2.1.2 / 4.5.2)
+# Поднимает изолированное локальное окружение:
+#   PostgreSQL + MinIO + FastAPI + React + Telegram-бот (aiogram3).
 #   Frontend:  http://localhost:3000
 #   Backend:   http://localhost:8000  (Swagger: /docs)
 #   Postgres:  localhost:${POSTGRES_PORT:-5432}
 #   MinIO:     http://localhost:9000  (консоль: http://localhost:9001)
+#   telegram-bot: polling (нужен валидный TELEGRAM_BOT_TOKEN)
 #   docker compose up --build -d
 #
 # Примечание по образу MinIO: официальные образы minio/minio в текущем окружении
@@ -71,6 +73,10 @@ services:
       MINIO_BUCKET_REPORTS: ${MINIO_BUCKET_REPORTS:-labflow-reports}
       MINIO_USE_SSL: "False"
       REPORT_MAX_SIZE_BYTES: ${REPORT_MAX_SIZE_BYTES:-20971520}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-LabFlowBot}
+      TELEGRAM_SERVICE_TOKEN: ${TELEGRAM_SERVICE_TOKEN:-labflow-telegram-service-token-change-me}
+      TELEGRAM_LINK_TOKEN_TTL_MINUTES: ${TELEGRAM_LINK_TOKEN_TTL_MINUTES:-10}
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     healthcheck:
@@ -79,6 +85,22 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
+
+  telegram-bot:
+    build:
+      context: ./backend
+    container_name: labflow_telegram_bot
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-LabFlowBot}
+      TELEGRAM_SERVICE_TOKEN: ${TELEGRAM_SERVICE_TOKEN:-labflow-telegram-service-token-change-me}
+      BACKEND_INTERNAL_URL: http://backend:8000
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-labflow_user}:${POSTGRES_PASSWORD:-labflow_secret_password}@postgres:5432/${POSTGRES_DB:-labflow_db}
+    command: ["python", "-m", "app.bot.main"]
 
   frontend:
     build:
