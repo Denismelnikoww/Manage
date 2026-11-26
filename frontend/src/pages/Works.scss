@@ -161,3 +161,100 @@
     flex: 1;
   }
 }
+/* Модальное окно */
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: white;
+  padding: 24px;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 600px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-color);
+
+  h3 { margin: 0; font-size: 18px; }
+  .close-btn {
+    background: none; border: none; font-size: 24px; cursor: pointer;
+    color: var(--text-muted); padding: 0;
+    &:hover { color: var(--text-main); }
+  }
+}
+
+.submission-info, .reports-section, .comments-section {
+  margin-bottom: 24px;
+  h4 { margin-bottom: 12px; font-size: 16px; }
+}
+
+.upload-section { display: flex; flex-direction: column; gap: 8px; }
+
+.reports-list { display: flex; flex-direction: column; gap: 8px; }
+.report-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #f8fafc;
+  padding: 10px;
+  border-radius: 4px;
+  border: 1px solid #e2e8f0;
+  font-size: 14px;
+
+  div { display: flex; flex-direction: column; gap: 2px; }
+  small { color: var(--text-muted); font-size: 12px; }
+
+  .btn-action {
+    width: auto;
+    margin-top: 0;
+    padding: 4px 12px;
+    font-size: 12px;
+  }
+}
+
+.comments-list {
+  max-height: 200px;
+  overflow-y: auto;
+  margin-bottom: 16px;
+}
+.comment-item {
+  background: #f1f5f9;
+  padding: 10px;
+  border-radius: 6px;
+  margin-bottom: 10px;
+  font-size: 14px;
+  p { margin: 4px 0; }
+  .comment-date { font-size: 11px; color: var(--text-muted); }
+}
+
+.comment-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    min-height: 80px;
+    resize: vertical;
+    font-family: inherit;
+    &:focus { outline: none; border-color: var(--primary-color); }
+  }
+}
